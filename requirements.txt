@@ -1,0 +1,5 @@
+# Runtime dependencies for the io-tracer-mac userspace tooling.
+# Note: DTrace ships with macOS and is invoked as a subprocess (no pip package).
+psutil>=5.8
+requests>=2.25
+zstandard>=0.21
