@@ -111,8 +111,11 @@ syscall::accept:entry, syscall::accept_nocancel:entry
 /pid != $1/
 { self->aptr = arg1; self->an = 1; self->astart = timestamp; }
 
+/* Success with a peer address: decode it. Only when arg0 >= 0 (the new fd) —
+ * on a failed accept the sockaddr buffer is untouched and would yield a bogus
+ * address. */
 syscall::accept:return, syscall::accept_nocancel:return
-/self->an && self->aptr != 0/
+/self->an && self->aptr != 0 && (int)arg0 >= 0/
 {
 	this->b = (uint8_t *)copyin(self->aptr, 16);
 	self->afam = this->b[1];
@@ -127,9 +130,17 @@ syscall::accept:return, syscall::accept_nocancel:return
 	self->an = 0; self->aptr = 0; self->afam = 0; self->aport = 0; self->astart = 0;
 }
 
+/* No decodable peer address (NULL addr buffer, or the accept failed): still
+ * record the lifecycle event, just without an address. */
 syscall::accept:return, syscall::accept_nocancel:return
-/self->an && self->aptr == 0/
-{ self->an = 0; self->astart = 0; }
+/self->an && (self->aptr == 0 || (int)arg0 < 0)/
+{
+	printf("ACCEPT\001%d\001%d\001%s\001-1\001-1\001%d\001-1\001-1\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\001%d\n",
+	    pid, tid, execname, (long)arg0,
+	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	    timestamp - self->astart, (long)arg0, walltimestamp, timestamp);
+	self->an = 0; self->aptr = 0; self->astart = 0;
+}
 
 /* ----- shutdown() ----- */
 syscall::shutdown:entry

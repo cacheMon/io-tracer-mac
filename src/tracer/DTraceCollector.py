@@ -48,8 +48,13 @@ _NON_IO_SIZE_OPS = frozenset({
     "rename", "link", "symlink",
 })
 
-# execnames that are pure tracer/kernel self-noise we never want in the trace.
-_FILTER_COMMS = frozenset({"dtrace", "kernel_task"})
+# execnames that are pure tracer self-noise we never want in the trace. Only the
+# tracer's own dtrace process is filtered: kernel_task is deliberately NOT
+# excluded, because on macOS it is the issuer of a large share of legitimate
+# block I/O (async writeback, paging, fsync flushes) that the ds stream exists to
+# capture. (kernel_task issues virtually no syscalls, so the fs stream is
+# unaffected either way.)
+_FILTER_COMMS = frozenset({"dtrace"})
 
 
 class DTraceCollector:
@@ -279,10 +284,10 @@ class DTraceCollector:
         if op in ("mkdir", "rmdir") and filename and not filename.endswith("/"):
             filename += "/"
 
-        size_val = "" if op in _NON_IO_SIZE_OPS else (size if size != "0" else "0")
-        # truncate/mmap keep size; read/write keep size including a legitimate 0.
-        if op in _NON_IO_SIZE_OPS:
-            size_val = ""
+        # Blank the size column only for non-I/O ops; read/write/truncate/mmap
+        # keep their numeric size, INCLUDING a legitimate 0 (EOF read, 0-byte
+        # write). Mirrors the Linux tracer's gating on op type, not truthiness.
+        size_val = "" if op in _NON_IO_SIZE_OPS else size
 
         offset_val = offset if offset not in ("", "0") else ""
         flags_val = self.flag_mapper.format_vfs_flags(op.upper(), flags)
