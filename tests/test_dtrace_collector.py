@@ -139,6 +139,17 @@ class IoParseTests(unittest.TestCase):
         self.assertEqual(cols[idx["request_id"]], "1")
         self.assertEqual(cols[idx["mono_ns"]], "555")
 
+    def test_kernel_task_block_io_is_kept(self):
+        # kernel_task issues a large share of macOS block I/O (async writeback);
+        # it must NOT be filtered from the ds stream.
+        rec = line("write", 0, 0, "kernel_task", 4096, 16384, 500000, 1, 4, 0,
+                   1700000000000000000, 77)
+        self.c._parse_io(rec)
+        self.assertEqual(len(self.c.writer.ds), 1)
+        cols = parse_csv_row(self.c.writer.ds[0])
+        idx = {n: i for i, n in enumerate(schema.column_names("ds"))}
+        self.assertEqual(cols[idx["command"]], "kernel_task")
+
     def test_request_id_increments(self):
         rec = line("write", 1, 1, "k", 1, 1, 1000, 1, 0, 0, 1700000000000000000, 1)
         self.c._parse_io(rec)
