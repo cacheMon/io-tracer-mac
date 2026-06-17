@@ -486,6 +486,16 @@ def get_current_tag() -> str:
         return "no_tags"
 
 def run_with_spinner(label: str, fn):
+    # When stderr is not a terminal (e.g. running as a launchd daemon whose
+    # stderr is redirected to a log file), the animated spinner would flood the
+    # log with thousands of carriage-return/ANSI frames. In that case skip the
+    # animation: print the label once, run the work synchronously, and return.
+    if not sys.stderr.isatty():
+        print(f"{label}...", file=sys.stderr, flush=True)
+        result = fn()
+        print(f"{label}... done", file=sys.stderr, flush=True)
+        return result
+
     done = threading.Event()
     exc_box: list[BaseException | None] = [None]
     result_box: list = [None]

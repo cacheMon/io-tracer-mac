@@ -119,23 +119,38 @@ class ProcessSampler:
                 print(f"[ProcessSampler] Error in sampling loop: {e}")
                 pass
 
-            # Clean up old entries
+            # Clean up old entries. The per-pid liveness check (psutil.Process /
+            # create_time) is a potentially slow system call, so it is done
+            # OUTSIDE the lock: under the lock we only trim each deque and note
+            # which ones emptied, then probe those pids unlocked, then briefly
+            # re-acquire the lock to delete confirmed-stale keys. This keeps the
+            # lock from blocking cpu_percent_for_interval() during a snapshot.
             cutoff = time.time() - self.max_interval
             with self.lock:
-                remove_keys = []
+                empty_keys = []
                 for key, dq in self.history.items():
                     while dq and dq[0][0] < cutoff:
                         dq.popleft()
                     if not dq:
-                        pid = key[0]
-                        try:
-                            p = psutil.Process(pid)
-                            if p.create_time() != key[1]:
-                                remove_keys.append(key)
-                        except psutil.NoSuchProcess:
-                            remove_keys.append(key)
-                for k in remove_keys:
-                    del self.history[k]
+                        empty_keys.append(key)
+
+            remove_keys = []
+            for key in empty_keys:
+                pid = key[0]
+                try:
+                    if psutil.Process(pid).create_time() != key[1]:
+                        remove_keys.append(key)
+                except psutil.NoSuchProcess:
+                    remove_keys.append(key)
+
+            if remove_keys:
+                with self.lock:
+                    for k in remove_keys:
+                        # Re-check emptiness: a new sample may have arrived for
+                        # this key while the lock was released.
+                        dq = self.history.get(k)
+                        if dq is not None and not dq:
+                            del self.history[k]
 
             time.sleep(self.sample_interval)
 

@@ -81,9 +81,13 @@ class DTraceCollector:
         self._req_id = 0
 
         # pid -> (cmdline, ppid) cache. DTrace records carry execname but not the
-        # full argv or parent pid, so resolve them once per pid via psutil.
+        # full argv or parent pid, so resolve them once per pid via psutil. The
+        # cache is shared by every per-stream reader thread (vfs/io/network all
+        # call _resolve_proc), so a lock guards the read/evict/write sequence
+        # against concurrent mutation ("dictionary changed size during iteration").
         self._proc_cache: dict[int, tuple[str, str]] = {}
         self._proc_cache_max = 100000
+        self._proc_cache_lock = threading.Lock()
 
         # Per-stream parse/record counts and dtrace drop tallies for the manifest.
         self.rows = {"fs": 0, "ds": 0, "nw_conn": 0}
@@ -210,31 +214,36 @@ class DTraceCollector:
     def _resolve_proc(self, pid: int) -> tuple[str, str]:
         """Return (cmdline, ppid_str) for a pid, cached. Empty strings when the
         process has already exited or is inaccessible."""
-        cached = self._proc_cache.get(pid)
+        with self._proc_cache_lock:
+            cached = self._proc_cache.get(pid)
         if cached is not None:
             return cached
+
         cmdline, ppid = "", ""
-        if psutil is None:
-            self._proc_cache[pid] = ("", "")
-            return ("", "")
-        try:
-            p = psutil.Process(pid)
-            argv = p.cmdline()
-            cmdline = " ".join(argv) if argv else ""
-            if len(cmdline) > 512:
-                cmdline = cmdline[:512] + "..."
-            ppid = str(p.ppid())
-        except Exception:
-            pass
-        if self.anonymous and cmdline:
-            from ..utility.utils import simple_hash
-            cmdline = simple_hash(cmdline, length=12)
-        if len(self._proc_cache) > self._proc_cache_max:
-            # Drop the oldest half (dicts preserve insertion order).
-            items = list(self._proc_cache.items())
-            self._proc_cache = dict(items[len(items) // 2:])
+        if psutil is not None:
+            # The psutil lookup is done OUTSIDE the lock: it can be slow and we
+            # must not block the other reader threads on it. A concurrent miss
+            # for the same pid just resolves twice and stores the same value.
+            try:
+                p = psutil.Process(pid)
+                argv = p.cmdline()
+                cmdline = " ".join(argv) if argv else ""
+                if len(cmdline) > 512:
+                    cmdline = cmdline[:512] + "..."
+                ppid = str(p.ppid())
+            except Exception:
+                pass
+            if self.anonymous and cmdline:
+                from ..utility.utils import simple_hash
+                cmdline = simple_hash(cmdline, length=12)
+
         result = (cmdline, ppid)
-        self._proc_cache[pid] = result
+        with self._proc_cache_lock:
+            if len(self._proc_cache) > self._proc_cache_max:
+                # Drop the oldest half (dicts preserve insertion order).
+                items = list(self._proc_cache.items())
+                self._proc_cache = dict(items[len(items) // 2:])
+            self._proc_cache[pid] = result
         return result
 
     def _should_filter(self, comm: str) -> bool:

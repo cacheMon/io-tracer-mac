@@ -77,6 +77,10 @@ class WriteManager:
         self.current_datetime = datetime.now()
 
         self.created_files = 0
+        # compress_log()/mark_fs_snapshot_complete() run from multiple stream
+        # rotation threads concurrently (compression happens outside the per-
+        # stream locks), so the shared created_files counter needs its own lock.
+        self._created_files_lock = threading.Lock()
         # Total rows written to disk per stream (keyed by buffer label), for the
         # session manifest — lets a consumer spot a stream whose probes attached
         # but produced no events.
@@ -743,8 +747,10 @@ class WriteManager:
                     num_parts = len(self.fs_snapshot_parts_pending_upload)
                     if num_parts > 0:
                         # Count each part individually to match upload counter
-                        self.created_files += num_parts
-                        logger('info', f"Files Created: {str(self.created_files)} (filesystem snapshot with {num_parts} parts)", True)
+                        with self._created_files_lock:
+                            self.created_files += num_parts
+                            created = self.created_files
+                        logger('info', f"Files Created: {str(created)} (filesystem snapshot with {num_parts} parts)", True)
                     for part_file in self.fs_snapshot_parts_pending_upload:
                         if os.path.exists(part_file):
                             self.upload_manager.append_object(part_file)
@@ -993,11 +999,14 @@ class WriteManager:
                     self._write_buffer_to_file(self.process_buffer, self._process_handle, "Process State")
 
         def write_fssnap():
-            with self._stream_locks['fs_snap']:
-                if self.fs_snap_buffer:
-                    if self._fs_snap_handle is None:
-                        self._fs_snap_handle = self._open_log_file(self.output_fs_snapshot_file, 'fs_snap')
-                    self._write_buffer_to_file(self.fs_snap_buffer, self._fs_snap_handle, "Filesystem Snapshot")
+            # Route buffered snapshot rows through the multi-part flush so a
+            # periodic flush landing mid-walk produces a snapshot *part*
+            # (filesystem_snapshot_part*.csv) rather than corrupting the snapshot
+            # by draining the buffer into the default single-file path. This
+            # preserves the "one snapshot = a complete set of parts" design.
+            # flush_fssnap_only() acquires the fs_snap lock itself, so it must
+            # not be called while holding it here.
+            self.flush_fssnap_only()
 
         def write_pagefault():
             with self._stream_locks['pagefault']:
@@ -1091,8 +1100,10 @@ class WriteManager:
             upload_target = dst if compressed else src
 
             if self.automatic_upload:
-                self.created_files += 1
-                logger('info', f"Files Created: {str(self.created_files)}", True)
+                with self._created_files_lock:
+                    self.created_files += 1
+                    created = self.created_files
+                logger('info', f"Files Created: {str(created)}", True)
                 # Upload each log individually, preserving its subdirectory
                 # (fs, ds, cache, process, ...) on the backend.
                 self.upload_manager.append_object(upload_target)
