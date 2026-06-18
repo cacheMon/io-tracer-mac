@@ -533,6 +533,55 @@ def run_with_spinner(label: str, fn):
     return result_box[0]
 
 
+# macOS / BSD st_flags bits (from <sys/stat.h>). Ordered low-to-high so the
+# decoded string is deterministic. Only the storage-relevant bits are named; any
+# remaining unknown bits are appended as a hex residue so nothing is lost.
+_STAT_FLAGS = (
+    (0x00000001, "UF_NODUMP"),
+    (0x00000002, "UF_IMMUTABLE"),
+    (0x00000004, "UF_APPEND"),
+    (0x00000008, "UF_OPAQUE"),
+    (0x00000020, "UF_COMPRESSED"),   # APFS transparent compression: logical size > physical
+    (0x00000040, "UF_TRACKED"),
+    (0x00000080, "UF_DATAVAULT"),
+    (0x00008000, "UF_HIDDEN"),
+    (0x00010000, "SF_ARCHIVED"),
+    (0x00020000, "SF_IMMUTABLE"),
+    (0x00040000, "SF_APPEND"),
+    (0x00080000, "SF_RESTRICTED"),   # SIP-protected
+    (0x00100000, "SF_NOUNLINK"),
+    (0x00200000, "SF_SNAPSHOT"),
+    (0x00800000, "SF_FIRMLINK"),
+    (0x40000000, "SF_DATALESS"),     # dataless placeholder (iCloud/File-Provider evicted): size is logical only
+)
+
+
+def decode_stat_flags(flags) -> str:
+    """Decode a macOS ``st_flags`` bitmask into a pipe-separated name string.
+
+    Returns ``""`` when no bits are set. Unknown bits are preserved as a
+    trailing ``0x...`` residue so the column is lossless. Storage-relevant bits
+    worth noting: ``UF_COMPRESSED`` (logical ``size`` exceeds on-disk
+    ``physical_size``) and ``SF_DATALESS`` (a cloud/File-Provider placeholder
+    whose bytes are not materialized locally).
+    """
+    try:
+        flags = int(flags)
+    except (TypeError, ValueError):
+        return ""
+    if flags == 0:
+        return ""
+    names = []
+    remaining = flags
+    for bit, name in _STAT_FLAGS:
+        if flags & bit:
+            names.append(name)
+            remaining &= ~bit
+    if remaining:
+        names.append(f"0x{remaining:08x}")
+    return "|".join(names)
+
+
 def format_csv_row(*fields) -> str:
     """
     Format fields as a CSV row without trailing newline.
