@@ -22,7 +22,13 @@ it from ``manifest.json`` and adapt.
 #     Linux-only extras, lowercase canonical operation names, ``size_requested``
 #     renamed to ``size``, and a dedicated block ``flags`` column (rwbs sub-flags
 #     split out of ``operation``).
-SCHEMA_VERSION = 3
+# v4: ``filesystem_snapshot`` enriched with per-file metadata the snapshot stat
+#     already has but previously dropped — ``physical_size`` (on-disk allocation,
+#     exposes APFS compression / sparse / dataless files), ``inode`` + ``device``
+#     (rename-stable identity, hardlink and per-volume disambiguation), ``nlinks``
+#     (hardlink fan-out), and decoded ``flags``. Appended after ``access_time``
+#     so columns 1-6 are unchanged; ``mono_ns`` stays trailing.
+SCHEMA_VERSION = 4
 
 
 def _col(name, ctype, unit="", desc=""):
@@ -248,10 +254,18 @@ STREAMS = {
         [
             _col("snapshot_timestamp", "datetime", "", "Time the snapshot was taken."),
             _col("file_path", "string", "", "Full path (hashed in anonymous mode)."),
-            _col("size", "integer", "bytes"),
+            _col("size", "integer", "bytes", "Logical file size (st_size)."),
             _col("creation_time", "datetime", "", "st_birthtime (falls back to st_mtime)."),
             _col("modification_time", "datetime", "", "st_mtime."),
             _col("access_time", "datetime", "", "st_atime."),
+            _col("physical_size", "integer", "bytes",
+                 "On-disk allocation (st_blocks * 512). Less than size for APFS-compressed "
+                 "or sparse files; 0 for dataless/cloud-evicted placeholders."),
+            _col("inode", "u64", "", "st_ino — stable file identity (survives rename/move)."),
+            _col("device", "string", "", "Backing device major:minor (st_dev) — disambiguates volume."),
+            _col("nlinks", "u32", "", "st_nlink — hardlink count (>1 means shared inode)."),
+            _col("flags", "string", "",
+                 "Decoded st_flags (UF_COMPRESSED, SF_DATALESS, SF_RESTRICTED, ...); empty when none."),
         ],
     ),
 }

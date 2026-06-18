@@ -25,7 +25,7 @@ EXPECTED_COLUMN_COUNTS = {
     "nw_sockopt": 10,          # 9 + mono_ns
     "nw_drop": 14,             # 13 + mono_ns
     "process": 12,             # 11 + mono_ns
-    "filesystem_snapshot": 7,  # 6 + mono_ns
+    "filesystem_snapshot": 12,  # 11 (v4: +physical_size,inode,device,nlinks,flags) + mono_ns
 }
 
 # Cross-OS aligned shared column prefix (schema v3). These leading columns must
@@ -41,8 +41,8 @@ ALIGNED_DS_PREFIX = [
 
 
 class SchemaShapeTests(unittest.TestCase):
-    def test_schema_version_is_3(self):
-        self.assertEqual(schema.SCHEMA_VERSION, 3)
+    def test_schema_version_is_4(self):
+        self.assertEqual(schema.SCHEMA_VERSION, 4)
 
     def test_fs_ds_aligned_prefix(self):
         self.assertEqual(schema.column_names("fs")[:len(ALIGNED_FS_PREFIX)],
@@ -90,7 +90,7 @@ class ManifestTests(unittest.TestCase):
         block = schema.schema_for_manifest()
         # Round-trips through JSON without error.
         restored = json.loads(json.dumps(block))
-        self.assertEqual(restored["schema_version"], 3)
+        self.assertEqual(restored["schema_version"], 4)
         self.assertEqual(set(restored["streams"]), set(EXPECTED_COLUMN_COUNTS))
 
     def test_manifest_columns_carry_type_and_unit(self):

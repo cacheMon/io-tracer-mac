@@ -15,7 +15,7 @@ Example:
     snapper.stop_snapper()  # Stop the snapper
 """
 
-from ...utility.utils import format_csv_row, logger, compress_log, anonymize_path
+from ...utility.utils import format_csv_row, logger, compress_log, anonymize_path, decode_stat_flags
 from ..WriterManager import WriteManager
 from datetime import datetime
 import shutil
@@ -61,6 +61,22 @@ class FilesystemSnapper:
         self.wm = wm
         self._visited_inodes = set()
 
+    @staticmethod
+    def _extra_metadata(est):
+        """Derive the v4 per-file metadata columns from a stat result.
+
+        All fields come from the stat already taken for size/timestamps, so this
+        adds no extra syscalls and never opens the file (atime is preserved).
+        Returns ``(physical_size, inode, device, nlinks, flags)``.
+        """
+        physical_size = getattr(est, "st_blocks", 0) * 512  # on-disk bytes (compression/sparse aware)
+        inode = est.st_ino
+        dev = est.st_dev
+        device = f"{os.major(dev)}:{os.minor(dev)}"
+        nlinks = est.st_nlink
+        flags = decode_stat_flags(getattr(est, "st_flags", 0))
+        return physical_size, inode, device, nlinks, flags
+
     def filesystem_snapshot(self, max_depth: int = None):
         """
         Perform a filesystem snapshot by walking the directory tree.
@@ -103,28 +119,23 @@ class FilesystemSnapper:
                             return
                         try:
                             if entry.is_file(follow_symlinks=False) or entry.is_symlink():
+                                est = entry.stat(follow_symlinks=False)
+                                size = est.st_size
+                                ctime = datetime.fromtimestamp(getattr(est, "st_birthtime", est.st_mtime))
+                                mtime = datetime.fromtimestamp(est.st_mtime)
+                                atime = datetime.fromtimestamp(est.st_atime)
+                                physical_size, inode, device, nlinks, flags = self._extra_metadata(est)
                                 if self.anonymous:
-                                    est = entry.stat(follow_symlinks=False)  
-                                    size = est.st_size
-                                    ctime = datetime.fromtimestamp(getattr(est, "st_birthtime", est.st_mtime))
-                                    mtime = datetime.fromtimestamp(est.st_mtime)
-                                    atime = datetime.fromtimestamp(est.st_atime)
-
                                     # Anonymize like the live fs stream: hash every
                                     # path component (basename included), keep depth.
-                                    hashed_path = anonymize_path(entry.path, keep_ext=True, length=12)
-                                    out = format_csv_row(snapshot_timestamp, hashed_path, size, ctime, mtime, atime, snapshot_mono_ns)
-                                    self.wm.append_fs_snap_log(out)
-                                    count += 1  
+                                    out_path = anonymize_path(entry.path, keep_ext=True, length=12)
                                 else:
-                                    est = entry.stat(follow_symlinks=False)
-                                    size = est.st_size
-                                    ctime = datetime.fromtimestamp(getattr(est, "st_birthtime", est.st_mtime))
-                                    mtime = datetime.fromtimestamp(est.st_mtime)
-                                    atime = datetime.fromtimestamp(est.st_atime)
-                                    out = format_csv_row(snapshot_timestamp, entry.path, size, ctime, mtime, atime, snapshot_mono_ns)
-                                    self.wm.append_fs_snap_log(out)
-                                    count += 1     
+                                    out_path = entry.path
+                                out = format_csv_row(
+                                    snapshot_timestamp, out_path, size, ctime, mtime, atime,
+                                    physical_size, inode, device, nlinks, flags, snapshot_mono_ns)
+                                self.wm.append_fs_snap_log(out)
+                                count += 1
                             elif entry.is_dir(follow_symlinks=False):
                                 scan_dir(entry.path, depth + 1)
                         except Exception:

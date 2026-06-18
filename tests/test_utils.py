@@ -22,6 +22,7 @@ from src.utility.utils import (
     hash_filename_in_path,
     anonymize_path,
     inet4_from_event,
+    decode_stat_flags,
 )
 
 
@@ -88,6 +89,29 @@ class HashTests(unittest.TestCase):
     def test_anonymize_path_is_deterministic(self):
         p = "/var/log/secret.log"
         self.assertEqual(anonymize_path(p), anonymize_path(p))
+
+
+class StatFlagsTests(unittest.TestCase):
+    def test_zero_is_empty(self):
+        self.assertEqual(decode_stat_flags(0), "")
+
+    def test_non_numeric_is_empty(self):
+        self.assertEqual(decode_stat_flags(None), "")
+        self.assertEqual(decode_stat_flags("xyz"), "")
+
+    def test_single_known_bit(self):
+        self.assertEqual(decode_stat_flags(0x20), "UF_COMPRESSED")
+        self.assertEqual(decode_stat_flags(0x40000000), "SF_DATALESS")
+
+    def test_combined_bits_low_to_high(self):
+        # UF_COMPRESSED (0x20) | SF_RESTRICTED (0x80000) ordered low->high
+        self.assertEqual(decode_stat_flags(0x20 | 0x80000),
+                         "UF_COMPRESSED|SF_RESTRICTED")
+
+    def test_unknown_bits_preserved_as_hex(self):
+        # 0x20 known + 0x4 (UF_APPEND known) + 0x10000000 unknown
+        out = decode_stat_flags(0x20 | 0x10000000)
+        self.assertEqual(out, "UF_COMPRESSED|0x10000000")
 
 
 class InetTests(unittest.TestCase):
