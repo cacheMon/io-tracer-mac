@@ -60,7 +60,8 @@ class VfsParseTests(unittest.TestCase):
         return parse_csv_row(row)
 
     def test_read_record(self):
-        rec = line("read", self.pid, 5678, "cat", "/etc/hosts", "",
+        # fields: op,pid,tid,exec,path,path2,fd,size,offset,flags,ret,errno,dur,wall,mono
+        rec = line("read", self.pid, 5678, "cat", "/etc/hosts", "", 3,
                    4096, 0, 0, 4096, 0, 12345, 1700000000000000000, 999999)
         self.c._parse_vfs(rec)
         self.assertEqual(len(self.c.writer.fs), 1)
@@ -80,8 +81,8 @@ class VfsParseTests(unittest.TestCase):
         self.assertTrue(cols[idx["timestamp"]].startswith("20"))
 
     def test_open_flags_decoded_and_size_blank(self):
-        # macOS O_WRONLY|O_CREAT == 0x0201
-        rec = line("open", self.pid, 1, "sh", "/tmp/x", "",
+        # macOS O_WRONLY|O_CREAT == 0x0201; open carries fd=-1, retval=new fd
+        rec = line("open", self.pid, 1, "sh", "/tmp/x", "", -1,
                    0, 0, 0x0201, 3, 0, 50, 1700000000000000000, 1000)
         self.c._parse_vfs(rec)
         cols = parse_csv_row(self.c.writer.fs[0])
@@ -91,7 +92,7 @@ class VfsParseTests(unittest.TestCase):
         self.assertEqual(cols[idx["return_value"]], "")  # only read/write carry it
 
     def test_write_failure_sets_errno(self):
-        rec = line("write", self.pid, 1, "app", "/data/f", "",
+        rec = line("write", self.pid, 1, "app", "/data/f", "", 5,
                    8192, 0, 0, -1, 28, 99, 1700000000000000000, 2000)
         self.c._parse_vfs(rec)
         cols = parse_csv_row(self.c.writer.fs[0])
@@ -101,15 +102,37 @@ class VfsParseTests(unittest.TestCase):
         self.assertEqual(cols[idx["bytes_completed"]], "")
 
     def test_rename_dual_path(self):
-        rec = line("rename", self.pid, 1, "mv", "/a", "/b", 0, 0, 0,
+        rec = line("rename", self.pid, 1, "mv", "/a", "/b", -1, 0, 0, 0,
                    0, 0, 10, 1700000000000000000, 3000)
         self.c._parse_vfs(rec)
         cols = parse_csv_row(self.c.writer.fs[0])
         idx = {n: i for i, n in enumerate(schema.column_names("fs"))}
         self.assertEqual(cols[idx["filename"]], "/a -> /b")
 
+    def test_fd_path_resolved_from_open_then_dropped_on_close(self):
+        # macOS has no fds[]: read/close carry only an fd, resolved from the
+        # path recorded at open() time.
+        idx = {n: i for i, n in enumerate(schema.column_names("fs"))}
+        # open returns fd 9 for /var/log/app.log
+        self.c._parse_vfs(line("open", self.pid, 1, "app", "/var/log/app.log", "",
+                               -1, 0, 0, 0, 9, 0, 5, 1700000000000000000, 1))
+        # read on fd 9 with no path -> resolved from the open map
+        self.c._parse_vfs(line("read", self.pid, 1, "app", "", "", 9,
+                               512, 0, 0, 512, 0, 9, 1700000000000000000, 2))
+        cols = parse_csv_row(self.c.writer.fs[-1])
+        self.assertEqual(cols[idx["filename"]], "/var/log/app.log")
+        # close on fd 9 resolves the path and then drops the mapping
+        self.c._parse_vfs(line("close", self.pid, 1, "app", "", "", 9,
+                               0, 0, 0, 0, 0, 1, 1700000000000000000, 3))
+        self.assertEqual(parse_csv_row(self.c.writer.fs[-1])[idx["filename"]],
+                         "/var/log/app.log")
+        # a later read on the (now closed/reused) fd no longer resolves
+        self.c._parse_vfs(line("read", self.pid, 1, "app", "", "", 9,
+                               1, 0, 0, 1, 0, 1, 1700000000000000000, 4))
+        self.assertEqual(parse_csv_row(self.c.writer.fs[-1])[idx["filename"]], "")
+
     def test_self_pid_dropped(self):
-        rec = line("read", os.getpid(), 1, "me", "/x", "", 1, 0, 0,
+        rec = line("read", os.getpid(), 1, "me", "/x", "", 3, 1, 0, 0,
                    1, 0, 1, 1700000000000000000, 1)
         self.c._parse_vfs(rec)
         self.assertEqual(len(self.c.writer.fs), 0)

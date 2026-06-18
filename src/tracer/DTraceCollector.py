@@ -94,6 +94,14 @@ class DTraceCollector:
         self._proc_cache_max = 100000
         self._proc_cache_lock = threading.Lock()
 
+        # (pid, fd) -> raw path map for VFS filename resolution. macOS DTrace has
+        # no fds[] array, so vfs.d emits the fd for read/write/close/fsync/
+        # ftruncate/mmap and the copied-in path for open; we correlate them here.
+        # Populated on open success, dropped on close. Only the single vfs reader
+        # thread touches this, so it needs no lock.
+        self._fd_paths: dict[tuple[int, int], str] = {}
+        self._fd_paths_max = 200000
+
         # Per-stream parse/record counts and dtrace drop tallies for the manifest.
         self.rows = {"fs": 0, "ds": 0, "nw_conn": 0}
         self.lost = {}
@@ -259,9 +267,9 @@ class DTraceCollector:
     # ------------------------------------------------------------------ #
     def _parse_vfs(self, line: str):
         f = line.split(SEP)
-        if len(f) != 14:
+        if len(f) != 15:
             return
-        (op, pid, tid, comm, path, path2, size, offset, flags,
+        (op, pid, tid, comm, path, path2, fd, size, offset, flags,
          retval, errno, duration_ns, wall, mono) = f
 
         if self._should_filter(comm):
@@ -275,7 +283,34 @@ class DTraceCollector:
 
         timestamp = self._walltime(wall)
 
-        filename = path
+        try:
+            ret_i = int(retval)
+        except ValueError:
+            ret_i = 0
+        try:
+            fd_i = int(fd)
+        except ValueError:
+            fd_i = -1
+
+        # Resolve the raw (pre-anonymization) filename. open/openat and the
+        # path-based ops carry the copied-in path directly; fd-based ops
+        # (read/write/close/fsync/ftruncate/mmap) resolve it from the per-process
+        # open map, since macOS DTrace has no in-kernel fd->path lookup.
+        raw = path
+        if op == "open":
+            # Record the fd->path mapping for this process on a successful open.
+            if ret_i >= 0 and path:
+                if len(self._fd_paths) > self._fd_paths_max:
+                    items = list(self._fd_paths.items())
+                    self._fd_paths = dict(items[len(items) // 2:])
+                self._fd_paths[(pid_i, ret_i)] = path
+        elif not raw and fd_i >= 0:
+            raw = self._fd_paths.get((pid_i, fd_i), "")
+            if op == "close":
+                # The fd is gone after close — drop the mapping (resolved above).
+                self._fd_paths.pop((pid_i, fd_i), None)
+
+        filename = raw
         if self.anonymous and filename:
             filename = anonymize_path(filename)
         if path2:
@@ -291,11 +326,6 @@ class DTraceCollector:
 
         offset_val = offset if offset not in ("", "0") else ""
         flags_val = self.flag_mapper.format_vfs_flags(op.upper(), flags)
-
-        try:
-            ret_i = int(retval)
-        except ValueError:
-            ret_i = 0
 
         return_value = ""
         errno_val = ""
