@@ -13,8 +13,8 @@ schema (see [TRACE_FORMAT.md](TRACE_FORMAT.md)).
 | 2 | [Block I/O Events](traces/BLOCK_IO_EVENTS.md) | DTrace `io` provider (`dtrace/io.d`) | `ds/ds_*.csv` |
 | 3 | [Network Events](traces/NETWORK_EVENTS.md) | DTrace `syscall` provider (`dtrace/network.d`) | `nw_conn/*.csv` |
 
-> **Opt-in streams.** Network tracing is **off by default** (enable with
-> `--network`) to keep overhead minimal — only the connection lifecycle is
+> **Network streams.** Network tracing is **on by default** (disable with
+> `--no-network`); to keep overhead minimal only the connection lifecycle is
 > traced, never the per-packet send/recv path. Page-cache and page-fault streams
 > (present in the Linux schema) are **not collected on macOS**; their schema
 > definitions are retained for cross-OS alignment but no files are produced.

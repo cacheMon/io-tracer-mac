@@ -13,7 +13,7 @@ Captured streams:
   * ``fs/``   — VFS / filesystem syscalls (read, write, open, close, fsync,
                 rename, ...) via ``dtrace/vfs.d``
   * ``ds/``   — block-device I/O completions via ``dtrace/io.d`` (DTrace io provider)
-  * ``nw_conn/`` — connection lifecycle (opt-in ``--network``) via ``dtrace/network.d``
+  * ``nw_conn/`` — connection lifecycle (on by default; ``--no-network`` to skip) via ``dtrace/network.d``
   * snapshots — filesystem, process, and system spec (userspace, OS-portable)
 
 Usage:
@@ -53,7 +53,7 @@ class IOTracer:
         verbose: bool = False,
         duration: int | None = None,
         trace_bucket: str | None = None,
-        trace_network: bool = False,
+        trace_network: bool = True,
     ):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = os.path.join(

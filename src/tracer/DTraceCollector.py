@@ -67,7 +67,7 @@ class DTraceCollector:
         script_dir: str,
         anonymous: bool = False,
         verbose: bool = False,
-        trace_network: bool = False,
+        trace_network: bool = True,
     ):
         self.writer = writer
         self.flag_mapper = flag_mapper

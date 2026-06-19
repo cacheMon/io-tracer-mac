@@ -1,11 +1,11 @@
-# Network Events (macOS, opt-in: `--network`)
+# Network Events (macOS, default; `--no-network` to skip)
 
 **Source:** DTrace `syscall` provider (`src/tracer/dtrace/network.d`).
 **Output:** `mac_trace_v1_test/{MACHINE_ID}/{TIMESTAMP}/nw_conn/*.csv.zst`
 
 A low-overhead **connection-lifecycle** subset, matching the spirit of the Linux
 tracer's network stream. The high-frequency per-packet send/recv path is
-intentionally **not** traced. Off by default; enable with `--network`.
+intentionally **not** traced. On by default; disable with `--no-network`.
 
 ## Event types (`event_type`)
 

@@ -105,7 +105,7 @@ sudo bash ./scripts/install_service.sh install     # also: uninstall|status|star
 ## Usage
 
 ```
-usage: sudo python3 iotrc.py [-h] [-v] [-a] [--network] [--computer-id]
+usage: sudo python3 iotrc.py [-h] [-v] [-a] [--no-network] [--computer-id]
                              [--reward] [--no-upload] {dev} ...
 
 Trace macOS I/O operations with DTrace
@@ -114,7 +114,7 @@ options:
   -h, --help       show this help message and exit
   -v, --verbose    Print verbose output
   -a, --anonimize  Enable anonymization of process and file names
-  --network        Enable network event tracing (connection lifecycle)
+  --no-network     Disable network event tracing (on by default)
   --computer-id    Print this machine ID and exit
   --reward         Show your reward code (unlocked after uploading traces)
   --no-upload      Disable automatic upload of traces (for testing)
@@ -127,11 +127,11 @@ subcommands:
 ### Examples
 
 ```bash
-# Default trace (filesystem + block I/O); uploads when finished
+# Default trace (filesystem + block I/O + network); uploads when finished
 sudo python3 iotrc.py
 
-# Add network connection tracing, with verbose logging
-sudo python3 iotrc.py --network -v
+# Skip network connection tracing, with verbose logging
+sudo python3 iotrc.py --no-network -v
 
 # Local-only run (no upload), developer mode
 sudo python3 iotrc.py dev --no-upload
@@ -154,7 +154,7 @@ with the prefix `mac_trace_v1_test/{MACHINE_ID}/{TIMESTAMP}/`:
 mac_trace_v1_test/{MACHINE_ID}/{YYYYMMDD_HHMMSS_mmm}/
 ├── fs/                    # VFS (filesystem syscall) traces
 ├── ds/                    # Block-device traces
-├── nw_conn/               # Network connection lifecycle (with --network)
+├── nw_conn/               # Network connection lifecycle (default; --no-network to skip)
 ├── process/               # Process state snapshots
 ├── filesystem_snapshot/   # Filesystem metadata snapshots
 ├── system_spec/           # System specification files (JSON)

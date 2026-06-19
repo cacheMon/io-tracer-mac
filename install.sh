@@ -108,9 +108,9 @@ print_success() {
     echo "Installation directory: $INSTALL_DIR"
     echo "Binary:                 $BIN_DIR/$BIN_NAME"
     echo ""
-    echo "To run:        sudo $BIN_NAME"
-    echo "With network:  sudo $BIN_NAME --network"
-    echo "Help:          sudo $BIN_NAME --help"
+    echo "To run:          sudo $BIN_NAME            # fs + block + network"
+    echo "Without network: sudo $BIN_NAME --no-network"
+    echo "Help:            sudo $BIN_NAME --help"
     echo "Uninstall:     sudo bash $INSTALL_DIR/uninstall.sh"
     echo ""
 }
