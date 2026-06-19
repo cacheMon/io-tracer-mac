@@ -53,7 +53,7 @@ session `manifest.json`, and the uploader). Only the event source differs:
                                                                  │
                           ┌──────────────────────────────────────┤
                           ▼                                        ▼
-                  WriteManager → fs/ ds/ nw_conn/         Snappers → process/
+                  WriteManager → fs/ block/ nw_conn/      Snappers → process/
                   (CSV + Zstandard, rotation)             filesystem_snapshot/ spec/
                           │                                        │
                           └──────────► ObjectStorageManager ◄──────┘  (upload)
@@ -183,7 +183,7 @@ with the prefix `mac_trace_v1_test/{MACHINE_ID}/{TIMESTAMP}/`:
 ```
 mac_trace_v1_test/{MACHINE_ID}/{YYYYMMDD_HHMMSS_mmm}/
 ├── fs/                    # VFS (filesystem syscall) traces
-├── ds/                    # Block-device traces
+├── block/                 # Block-device traces
 ├── nw_conn/               # Network connection lifecycle (default; --no-network to skip)
 ├── process/               # Process state snapshots
 ├── filesystem_snapshot/   # Filesystem metadata snapshots
@@ -218,7 +218,7 @@ unavailable" convention):
 
 - **`inode`, `device`, `fs_type`, `container_id`** on `fs/` records — not exposed
   by the DTrace syscall context.
-- **`queue_latency_ms`, `command_flags`, `operation_code`** on `ds/` records —
+- **`queue_latency_ms`, `command_flags`, `operation_code`** on `block/` records —
   Linux block-layer extras.
 - **`cache/` (page cache) and `pagefault/`** streams are not collected on macOS
   (the Linux tracer also leaves page-cache opt-in and page-faults disabled). The
@@ -269,7 +269,7 @@ src/tracer/snappers/           # filesystem / process / system snapshots
 - **`dtrace cannot control executables signed with restricted entitlements`** —
   expected for some Apple-signed processes under SIP; this tracer only relies on
   the `syscall`/`io` providers and skips restricted targets.
-- **No `fs/`/`ds/` files produced** — confirm `dtrace` is on `PATH` (or at
+- **No `fs/`/`block/` files produced** — confirm `dtrace` is on `PATH` (or at
   `/usr/sbin/dtrace`) and that you ran with `sudo`. Use `-v` to see per-stream
   startup and any dtrace diagnostics.
 - **Traces aren't compressed (`.csv` instead of `.csv.zst`)** — install the

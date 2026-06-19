@@ -10,7 +10,7 @@ schema (see [TRACE_FORMAT.md](TRACE_FORMAT.md)).
 | # | Trace Type | Collection method | Output |
 |---|------------|-------------------|--------|
 | 1 | [VFS Events](traces/VFS_EVENTS.md) | DTrace `syscall` provider (`dtrace/vfs.d`) | `fs/fs_*.csv` |
-| 2 | [Block I/O Events](traces/BLOCK_IO_EVENTS.md) | DTrace `io` provider (`dtrace/io.d`) | `ds/ds_*.csv` |
+| 2 | [Block I/O Events](traces/BLOCK_IO_EVENTS.md) | DTrace `io` provider (`dtrace/io.d`) | `block/block_*.csv` |
 | 3 | [Network Events](traces/NETWORK_EVENTS.md) | DTrace `syscall` provider (`dtrace/network.d`) | `nw_conn/*.csv` |
 
 > **Network streams.** Network tracing is **on by default** (disable with
@@ -46,7 +46,7 @@ Snapshots are collected in userspace via `psutil` and macOS CLI tools
 │  │   _parse_vfs / _parse_io / _parse_net  → schema rows   │   │
 │  └──────────────────────────┬────────────────────────────┘   │
 │  ┌──────────────────────────▼────────────────────────────┐   │
-│  │  WriteManager  → fs/ ds/ nw_conn/ (CSV + Zstandard)     │   │
+│  │  WriteManager  → fs/ block/ nw_conn/ (CSV + Zstandard)  │   │
 │  │  Snappers      → process/ filesystem_snapshot/ spec/    │   │
 │  │  ObjectStorageManager → upload                          │   │
 │  └─────────────────────────────────────────────────────────┘  │

@@ -17,7 +17,7 @@ it from ``manifest.json`` and adapt.
 
 # v1: original headerless CSVs, no manifest, per-stream clocks.
 # v2: CSV headers + manifest.json + a common ``mono_ns`` column on every stream.
-# v3: cross-OS aligned layout for ``fs`` and ``ds`` — a fixed shared column
+# v3: cross-OS aligned layout for ``fs`` and ``block`` — a fixed shared column
 #     prefix (identical names/order to the Windows tracer) followed by the
 #     Linux-only extras, lowercase canonical operation names, ``size_requested``
 #     renamed to ``size``, and a dedicated block ``flags`` column (rwbs sub-flags
@@ -28,7 +28,10 @@ it from ``manifest.json`` and adapt.
 #     (rename-stable identity, hardlink and per-volume disambiguation), ``nlinks``
 #     (hardlink fan-out), and decoded ``flags``. Appended after ``access_time``
 #     so columns 1-6 are unchanged; ``mono_ns`` stays trailing.
-SCHEMA_VERSION = 4
+# v5: macOS-only — renamed the block-I/O stream key/subdir/filename prefix from
+#     ``ds`` to ``block`` for clarity (columns are unchanged). This diverges the
+#     macOS on-disk layout from the Linux tracer, which keeps ``ds``.
+SCHEMA_VERSION = 5
 
 
 def _col(name, ctype, unit="", desc=""):
@@ -89,8 +92,8 @@ STREAMS = {
             _col("fs_type", "string", "", "Source filesystem name from superblock magic."),
         ],
     ),
-    "ds": _stream(
-        "ds", "ds",
+    "block": _stream(
+        "block", "block",
         "Block-device (disk) I/O completion events.",
         "CLOCK_REALTIME (derived from kernel CLOCK_MONOTONIC)",
         [

@@ -12,7 +12,7 @@ on-disk format is directly comparable across operating systems.
 Captured streams:
   * ``fs/``   — VFS / filesystem syscalls (read, write, open, close, fsync,
                 rename, ...) via ``dtrace/vfs.d``
-  * ``ds/``   — block-device I/O completions via ``dtrace/io.d`` (DTrace io provider)
+  * ``block/`` — block-device I/O completions via ``dtrace/io.d`` (DTrace io provider)
   * ``nw_conn/`` — connection lifecycle (on by default; ``--no-network`` to skip) via ``dtrace/network.d``
   * snapshots — filesystem, process, and system spec (userspace, OS-portable)
 

@@ -23,11 +23,11 @@ from src.tracer.FlagMapper import FlagMapper
 class FakeWriter:
     """Captures rows the collector would write, per stream."""
     def __init__(self):
-        self.fs, self.ds, self.conn = [], [], []
+        self.fs, self.block, self.conn = [], [], []
         self.rows_written = {}
 
     def append_fs_log(self, row): self.fs.append(row)
-    def append_block_log(self, row): self.ds.append(row)
+    def append_block_log(self, row): self.block.append(row)
     def append_conn_log(self, row): self.conn.append(row)
 
 
@@ -150,10 +150,10 @@ class IoParseTests(unittest.TestCase):
         rec = line("read", 4242, 7, "kernel", 100, 8192, 2_000_000, 1, 5, 2,
                    1700000000000000000, 555)
         self.c._parse_io(rec)
-        self.assertEqual(len(self.c.writer.ds), 1)
-        cols = parse_csv_row(self.c.writer.ds[0])
-        self.assertEqual(len(cols), len(schema.column_names("ds")))
-        idx = {n: i for i, n in enumerate(schema.column_names("ds"))}
+        self.assertEqual(len(self.c.writer.block), 1)
+        cols = parse_csv_row(self.c.writer.block[0])
+        self.assertEqual(len(cols), len(schema.column_names("block")))
+        idx = {n: i for i, n in enumerate(schema.column_names("block"))}
         self.assertEqual(cols[idx["operation"]], "read")
         self.assertEqual(cols[idx["sector"]], "100")
         self.assertEqual(cols[idx["size"]], "8192")
@@ -164,21 +164,21 @@ class IoParseTests(unittest.TestCase):
 
     def test_kernel_task_block_io_is_kept(self):
         # kernel_task issues a large share of macOS block I/O (async writeback);
-        # it must NOT be filtered from the ds stream.
+        # it must NOT be filtered from the block stream.
         rec = line("write", 0, 0, "kernel_task", 4096, 16384, 500000, 1, 4, 0,
                    1700000000000000000, 77)
         self.c._parse_io(rec)
-        self.assertEqual(len(self.c.writer.ds), 1)
-        cols = parse_csv_row(self.c.writer.ds[0])
-        idx = {n: i for i, n in enumerate(schema.column_names("ds"))}
+        self.assertEqual(len(self.c.writer.block), 1)
+        cols = parse_csv_row(self.c.writer.block[0])
+        idx = {n: i for i, n in enumerate(schema.column_names("block"))}
         self.assertEqual(cols[idx["command"]], "kernel_task")
 
     def test_request_id_increments(self):
         rec = line("write", 1, 1, "k", 1, 1, 1000, 1, 0, 0, 1700000000000000000, 1)
         self.c._parse_io(rec)
         self.c._parse_io(rec)
-        self.assertEqual(parse_csv_row(self.c.writer.ds[0])[15], "1")
-        self.assertEqual(parse_csv_row(self.c.writer.ds[1])[15], "2")
+        self.assertEqual(parse_csv_row(self.c.writer.block[0])[15], "1")
+        self.assertEqual(parse_csv_row(self.c.writer.block[1])[15], "2")
 
 
 class NetParseTests(unittest.TestCase):

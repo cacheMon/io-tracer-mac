@@ -1,7 +1,7 @@
 # Block I/O Events (macOS)
 
 **Source:** DTrace `io` provider (`src/tracer/dtrace/io.d`).
-**Output:** `mac_trace_v1_test/{MACHINE_ID}/{TIMESTAMP}/ds/ds_*.csv.zst`
+**Output:** `mac_trace_v1_test/{MACHINE_ID}/{TIMESTAMP}/block/block_*.csv.zst`
 
 Captures block-level device I/O. The stable `io` provider fires `io:::start`
 when a request is issued to a device and `io:::done` on completion. The tracer
