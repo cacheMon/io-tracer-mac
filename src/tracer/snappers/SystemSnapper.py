@@ -31,6 +31,7 @@ import platform
 import shutil
 import requests
 import json
+import os
 
 
 # ARM "CPU implementer" hex codes (from /proc/cpuinfo) → vendor name. Used only
@@ -272,6 +273,19 @@ class SystemSnapper:
                     "fstype": part.fstype,
                     "opts": part.opts
                 }
+                # st_dev (major:minor) of the mountpoint. The filesystem_snapshot
+                # stream records each file's backing volume as this same
+                # "major:minor" string, but those numbers are transient — APFS (and
+                # Linux) reassign them on remount/reboot, so they are NOT stable
+                # across runs and cannot be joined to a volume by themselves.
+                # Recording the mountpoint's st_dev here, captured in the same run,
+                # is what makes the snapshot's "device" column resolvable to a real
+                # volume name/mountpoint. Format MUST match FilesystemSnapper.
+                try:
+                    dev = os.stat(part.mountpoint).st_dev
+                    partition_info["dev_major_minor"] = f"{os.major(dev)}:{os.minor(dev)}"
+                except OSError:
+                    partition_info["dev_major_minor"] = None
                 try:
                     usage = psutil.disk_usage(part.mountpoint)
                     partition_info["total_bytes"] = usage.total

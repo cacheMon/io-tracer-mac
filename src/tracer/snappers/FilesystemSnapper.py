@@ -47,19 +47,25 @@ class FilesystemSnapper:
         snapper.stop_snapper()
     """
     
-    def __init__(self, wm: WriteManager, anonymous: bool = False):
+    # Target wall-clock interval between snapshot *starts*, in seconds.
+    SNAPSHOT_INTERVAL_S = 3600
+
+    def __init__(self, wm: WriteManager, anonymous: bool = False,
+                 snapshot_interval_s: int = SNAPSHOT_INTERVAL_S):
         """
         Initialize the FilesystemSnapper.
-        
+
         Args:
             wm: WriteManager for outputting snapshot data
             anonymous: Whether to hash file paths (default: False)
+            snapshot_interval_s: Target seconds between snapshot starts (default 1h)
         """
         self.anonymous = anonymous
         self.root_path = "/"
         self.interrupt = False
         self.wm = wm
         self._visited_inodes = set()
+        self.snapshot_interval_s = snapshot_interval_s
 
     @staticmethod
     def _extra_metadata(est):
@@ -177,31 +183,34 @@ class FilesystemSnapper:
             return -1
 
     def _snapshot_loop(self):
-        """Loop that runs snapshots every hour."""
-        last_snapshot_time = None
-        
+        """Take a snapshot every ``snapshot_interval_s`` seconds, start-to-start.
+
+        The cadence is anchored to when each snapshot *starts*, not when it
+        finishes. A whole-disk walk on a multi-million-file APFS volume can take
+        many minutes to hours; the previous implementation slept a full interval
+        *after* the walk completed, so the effective period was
+        ``interval + walk_duration`` and drifted further every cycle (observed:
+        only 3 snapshots in 9.4 h against a 1 h target). Anchoring to the start
+        time makes the period ``max(interval, walk_duration)`` instead. If a walk
+        overruns the interval the next one starts immediately rather than
+        compounding the lag.
+        """
         while not self.interrupt:
-            current_time = time.time()
-            
-            # Check if we should take a snapshot
-            if last_snapshot_time is None:
-                # First snapshot - run immediately
-                completed = self.filesystem_snapshot()
-                if completed:
-                    last_snapshot_time = time.time()
-            else:
-                # Check if one hour has passed since last snapshot
-                time_since_last_snapshot = current_time - last_snapshot_time
-                if time_since_last_snapshot >= 3600:  # 3600 seconds = 1 hour
-                    # Reset visited inodes before new snapshot
-                    self._visited_inodes.clear()
-                    completed = self.filesystem_snapshot()
-                    if completed:
-                        last_snapshot_time = time.time()
-                    last_snapshot_time = time.time()
-                else:
-                    # Less than one hour ago - sleep 1 minute
-                    time.sleep(60)
+            start = time.time()
+            # Each snapshot is an independent full inventory; clear the per-walk
+            # directory-dedup set so the next walk re-scans the whole tree.
+            self._visited_inodes.clear()
+            self.filesystem_snapshot()
+
+            # Sleep off whatever remains of the interval, measured from the start
+            # of this snapshot. Non-positive means the walk already overran the
+            # interval -> loop straight into the next one. Nap in short slices so
+            # stop_snapper() is honored promptly.
+            remaining = self.snapshot_interval_s - (time.time() - start)
+            while remaining > 0 and not self.interrupt:
+                nap = min(60, remaining)
+                time.sleep(nap)
+                remaining -= nap
 
     def run(self):
         """Start the snapshot in a background daemon thread."""
