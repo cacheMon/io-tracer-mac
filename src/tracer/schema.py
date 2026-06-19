@@ -31,7 +31,7 @@ it from ``manifest.json`` and adapt.
 # v5: macOS-only — renamed the block-I/O stream key/subdir/filename prefix from
 #     ``ds`` to ``block`` for clarity (columns are unchanged). This diverges the
 #     macOS on-disk layout from the Linux tracer, which keeps ``ds``.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 1
 
 
 def _col(name, ctype, unit="", desc=""):
