@@ -119,10 +119,13 @@ class IOTracer:
 
     # ------------------------------------------------------------------ #
     def _attached_probes(self):
-        probes = ["syscall (vfs.d)", "io (io.d)"]
+        streams = [("vfs.d", "syscall (vfs.d)"), ("io.d", "io (io.d)")]
         if self.trace_network:
-            probes.append("syscall (network.d)")
-        return probes
+            streams.append(("network.d", "syscall (network.d)"))
+        # Exclude streams whose probes failed to attach (e.g. blocked by SIP) so
+        # the manifest reports what was actually captured, not what was intended.
+        failed = self.collector.get_attach_failures()
+        return [label for script, label in streams if script not in failed]
 
     def _write_manifest(self, started_at, stopped_at=None):
         """Write the per-session ``manifest.json`` (schema + clock + versions +
@@ -154,6 +157,7 @@ class IOTracer:
             },
             "diagnostics": {
                 "attached_probes": self._attached_probes(),
+                "attach_failures": self.collector.get_attach_failures(),
                 "lost_events": dict(self.collector.lost),
                 "rows_parsed": dict(self.collector.rows),
                 "rows_written": dict(self.writer.rows_written),
@@ -182,6 +186,23 @@ class IOTracer:
     def trace(self):
         """Start tracing: launch DTrace, capture snapshots, run until stopped."""
         run_with_spinner("Starting DTrace probes", self.collector.start)
+
+        # If no DTrace stream could attach its probes there is nothing to trace.
+        # The usual cause is System Integrity Protection (SIP) restricting the
+        # syscall/io providers, so stop now (rather than writing empty streams
+        # and uploading an empty trace) and point the user at how to fix it.
+        if self.collector.startup_failed:
+            self.collector.stop()
+            self.writer.close_handles()
+            logger("error",
+                   "Stopping: DTrace could not attach any probes. If System "
+                   "Integrity Protection (SIP) is enabled it must be configured "
+                   "to allow DTrace first: reboot into macOS Recovery and run "
+                   "`csrutil enable --without dtrace` (or `csrutil disable`), "
+                   "then reboot and re-run with sudo. See docs/SIP.md for the "
+                   "full steps.")
+            raise SystemExit(1)
+
         if self.automatic_upload:
             self.upload_manager.start_worker()
 

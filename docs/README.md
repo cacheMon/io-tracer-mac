@@ -4,6 +4,8 @@
   collected via DTrace, plus an architecture overview.
 - [TRACE_FORMAT.md](TRACE_FORMAT.md) — the on-disk CSV/JSON output format, the
   upload prefix layout, and `manifest.json`.
+- [SIP.md](SIP.md) — how to allow DTrace under System Integrity Protection
+  (required before tracing on a stock Mac).
 
 Per-stream details:
 

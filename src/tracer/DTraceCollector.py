@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 from datetime import datetime
 
 try:
@@ -55,6 +56,28 @@ _NON_IO_SIZE_OPS = frozenset({
 # capture. (kernel_task issues virtually no syscalls, so the fs stream is
 # unaffected either way.)
 _FILTER_COMMS = frozenset({"dtrace"})
+
+# stderr substrings that mean a dtrace stream could not attach its probes (as
+# opposed to a runtime drop). The most common cause on a stock Mac is SIP
+# restricting the syscall/io providers, which makes dtrace exit immediately —
+# leaving the tracer to write empty fs/ds streams for the whole session unless
+# we notice and say so.
+_ATTACH_FAIL_SIGNS = (
+    "does not match any probes",
+    "failed to compile",
+    "system integrity protection is on",
+)
+
+# Shown once when SIP is the reported cause, instead of a per-probe error dump.
+_SIP_GUIDANCE = (
+    "DTrace could not attach its kernel probes: System Integrity Protection "
+    "(SIP) is blocking the syscall/io providers, so NO filesystem or block-I/O "
+    "events will be captured. To allow DTrace, reboot into macOS Recovery "
+    "(hold the power button on Apple silicon, or Cmd-R on Intel) and run one of:\n"
+    "    csrutil enable --without dtrace   # keep SIP, permit DTrace\n"
+    "    csrutil disable                   # fully disable SIP\n"
+    "then reboot and re-run the tracer with sudo."
+)
 
 
 class DTraceCollector:
@@ -106,6 +129,16 @@ class DTraceCollector:
         self.rows = {"fs": 0, "ds": 0, "nw_conn": 0}
         self.lost = {}
 
+        # script_name -> the stderr line for streams whose probes failed to
+        # attach (recorded in the manifest so an empty trace is self-explaining).
+        # Guarded because each stream's stderr is drained on its own thread.
+        self.attach_failures: dict[str, str] = {}
+        self._report_lock = threading.Lock()
+        self._sip_reported = False
+        # Set by _await_attach when no stream could attach its probes (the SIP
+        # case): the caller uses it to stop instead of writing empty streams.
+        self.startup_failed = False
+
         self.dtrace_path = shutil.which("dtrace") or "/usr/sbin/dtrace"
 
     # ------------------------------------------------------------------ #
@@ -120,6 +153,68 @@ class DTraceCollector:
 
         for script, parser in streams:
             self._launch(script, parser)
+
+        self._await_attach()
+
+    def _await_attach(self):
+        """Give the freshly launched dtrace processes a moment to compile their
+        probes. A probe-match/SIP failure makes dtrace exit almost immediately,
+        so a short grace period lets us warn up front that nothing will be
+        captured instead of silently writing empty streams for the whole
+        session. The per-stream stderr threads emit the cause (and SIP guidance)
+        and flip ``startup_failed`` the instant they see a SIP line; here we
+        also fall back to flagging it if every stream simply exited."""
+        if not self._procs:
+            return
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            # Stop waiting as soon as SIP is detected (stderr) or all streams die.
+            if self.startup_failed or all(p.poll() is not None for p in self._procs):
+                break
+            time.sleep(0.1)
+
+        if self.startup_failed:
+            return  # SIP already detected and reported by the stderr reader
+
+        launched = len(self._procs)
+        failed = sum(1 for p in self._procs if p.poll() is not None)
+        if failed >= launched:
+            self.startup_failed = True
+            logger("error",
+                   "All DTrace streams exited at startup — no filesystem or "
+                   "block-I/O events can be captured.")
+        elif failed:
+            logger("warning",
+                   f"{failed} of {launched} DTrace streams failed to start; the "
+                   f"corresponding trace stream(s) will be empty.")
+
+    def get_attach_failures(self) -> dict[str, str]:
+        """Return a snapshot of the per-stream attach failures. Taken under the
+        lock because the background stderr threads mutate the dict concurrently
+        with the main thread reading it (manifest write / attached-probe list)."""
+        with self._report_lock:
+            return dict(self.attach_failures)
+
+    def _report_attach_failure(self, script_name: str, line: str):
+        """A dtrace stream failed to compile/attach its probes. Record it for the
+        manifest and surface one clear, actionable message — once for the SIP
+        case — rather than a cryptic per-probe dump."""
+        with self._report_lock:
+            first = script_name not in self.attach_failures
+            self.attach_failures[script_name] = line
+            sip = "system integrity protection is on" in line.lower()
+            report_sip = sip and not self._sip_reported
+            if report_sip:
+                self._sip_reported = True
+            if sip:
+                # SIP restricts the whole provider, so even a single SIP-blocked
+                # stream means tracing can't work — fail startup immediately
+                # rather than waiting to see whether every stream dies.
+                self.startup_failed = True
+        if first:
+            logger("error", f"[dtrace {script_name}] probe attach failed: {line}")
+        if report_sip:
+            logger("error", _SIP_GUIDANCE)
 
     def _launch(self, script_name: str, parser):
         script_path = os.path.join(self.script_dir, script_name)
@@ -205,9 +300,13 @@ class DTraceCollector:
                 line = line.strip()
                 if not line:
                     continue
-                if "drop" in line.lower():
+                low = line.lower()
+                if "drop" in low:
                     self.lost[script_name] = self.lost.get(script_name, 0) + 1
-                if self.verbose or "fail" in line.lower() or "invalid" in line.lower():
+                if any(sign in low for sign in _ATTACH_FAIL_SIGNS):
+                    # Probe-attach/SIP failure: surfaced as one actionable error.
+                    self._report_attach_failure(script_name, line)
+                elif self.verbose or "fail" in low or "invalid" in low:
                     logger("warning", f"[dtrace {script_name}] {line}")
         except Exception:
             pass

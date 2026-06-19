@@ -69,15 +69,45 @@ and [docs/TRACE_FORMAT.md](docs/TRACE_FORMAT.md) for the full column layout.
 - **macOS** with DTrace (ships with every release at `/usr/sbin/dtrace`).
 - **Root**: DTrace requires `sudo`.
 - **Python 3.9+**.
-- DTrace must be permitted by **System Integrity Protection (SIP)**. The
-  `syscall` and `io` providers used here work under the default SIP policy for
-  unrestricted processes; tracing Apple-signed/"restricted" binaries (and the
-  `fbt` provider) would require disabling SIP, which this tracer does **not**
-  rely on.
+- DTrace must be permitted by **System Integrity Protection (SIP)** — see
+  [Allowing DTrace under SIP](#allowing-dtrace-under-sip) below.
 
 Python dependencies (`requirements.txt`): `psutil`, `requests`, and `zstandard`.
 `zstandard` is optional — without it the tracer still runs and keeps traces
 uncompressed.
+
+### Allowing DTrace under SIP
+
+On a stock Mac, **System Integrity Protection (SIP)** keeps DTrace switched off,
+so the `syscall`/`io` probes this tracer relies on can't attach (you'll see
+`probe description ... does not match any probes. System Integrity Protection is
+on`). If the probes can't attach, the tracer **stops at startup** with this same
+guidance rather than recording an empty trace.
+
+Allowing DTrace is a one-time change made from **macOS Recovery** (the command
+won't run from your normal desktop):
+
+1. **Boot into Recovery:**
+   - **Apple silicon (M1/M2/M3/…):** shut down, then press and hold the **power
+     button** until "Loading startup options" appears → **Options → Continue**.
+   - **Intel:** restart and immediately hold **⌘ (Command) + R** until the Apple
+     logo appears.
+2. In the menu bar choose **Utilities → Terminal**.
+3. Run **one** of:
+
+   ```bash
+   csrutil enable --without dtrace   # keep SIP on, permit only DTrace (recommended)
+   csrutil disable                   # fully disable SIP (only if the above isn't available)
+   ```
+
+4. Restart back to macOS (`reboot`), then run the tracer with `sudo`.
+
+To restore full protection when you're done, boot into Recovery again and run
+`csrutil enable`. You can check the current setting any time (no reboot needed)
+with `csrutil status`.
+
+See [docs/SIP.md](docs/SIP.md) for a friendlier, more detailed walkthrough
+(identifying your Mac, re-enabling SIP, troubleshooting, managed Macs).
 
 ---
 
@@ -229,6 +259,11 @@ src/tracer/snappers/           # filesystem / process / system snapshots
 
 ## Troubleshooting
 
+- **`... does not match any probes. System Integrity Protection is on`** (or
+  *"All DTrace streams exited at startup"*) — SIP is blocking the DTrace
+  providers, so no events can be captured. Reboot into Recovery and run
+  `csrutil enable --without dtrace` (or `csrutil disable`), then reboot and
+  re-run the tracer. See **Requirements** above.
 - **`dtrace: failed to initialize dtrace: DTrace requires additional privileges`**
   — run with `sudo`.
 - **`dtrace cannot control executables signed with restricted entitlements`** —
