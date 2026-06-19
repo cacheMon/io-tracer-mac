@@ -370,6 +370,45 @@ def capture_machine_id() -> str:
     """
     return simple_hash(_raw_machine_id(), 16)
 
+
+_GIT_COMMIT_CACHE = "__unset__"
+
+def get_git_commit() -> str | None:
+    """Short git commit id of the tracer source, e.g. ``"a1b2c3d"`` or
+    ``"a1b2c3d-dirty"`` when the working tree has uncommitted changes.
+
+    Lets every capture's manifest.json record exactly which tracer build produced
+    it — the trace format and even which streams populate have changed between
+    commits (e.g. the vfs.d fix that turned the previously-empty fs stream on), so
+    pinning the commit is what makes a stored trace reproducible/diagnosable.
+
+    Returns ``None`` when the source is not a git checkout (installed via the
+    curl|bash installer, a release tarball, etc.) or ``git`` is unavailable.
+    Cached after the first call.
+    """
+    global _GIT_COMMIT_CACHE
+    if _GIT_COMMIT_CACHE != "__unset__":
+        return _GIT_COMMIT_CACHE
+    commit = None
+    try:
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        rev = subprocess.run(
+            ["git", "-C", repo_dir, "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if rev.returncode == 0 and rev.stdout.strip():
+            commit = rev.stdout.strip()
+            dirty = subprocess.run(
+                ["git", "-C", repo_dir, "status", "--porcelain"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if dirty.returncode == 0 and dirty.stdout.strip():
+                commit += "-dirty"
+    except (OSError, subprocess.SubprocessError):
+        commit = None
+    _GIT_COMMIT_CACHE = commit
+    return commit
+
 # Reward code for Prolific submissions
 REWARD_CODE = "CKXDRTBX"
 

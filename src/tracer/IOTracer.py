@@ -36,7 +36,7 @@ from .WriterManager import WriteManager
 from .snappers.FilesystemSnapper import FilesystemSnapper
 from .snappers.ProcessSnapper import ProcessSnapper
 from .snappers.SystemSnapper import SystemSnapper
-from ..utility.utils import capture_machine_id, logger, run_with_spinner
+from ..utility.utils import capture_machine_id, get_git_commit, logger, run_with_spinner
 
 
 class IOTracer:
@@ -130,7 +130,8 @@ class IOTracer:
         manifest = schema.schema_for_manifest()
         duration = (stopped_at - started_at).total_seconds() if stopped_at else None
         manifest.update({
-            "tracer": {"version": self.version, "engine": "dtrace"},
+            "tracer": {"version": self.version, "engine": "dtrace",
+                       "commit": get_git_commit()},
             "machine_id": capture_machine_id(),
             "host": {
                 "platform": platform.platform(),
@@ -187,7 +188,9 @@ class IOTracer:
         signal.signal(signal.SIGINT, self._cleanup)
         signal.signal(signal.SIGTERM, self._cleanup)
 
-        logger("info", "IO Tracer (macOS) is running")
+        commit = get_git_commit()
+        logger("info", f"IO Tracer (macOS) is running "
+                       f"(version {self.version}, commit {commit or 'unknown'})")
         logger("info", "Press Ctrl+C to exit")
 
         # Initial snapshots (userspace — same code path as the Linux tracer).
