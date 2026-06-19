@@ -262,7 +262,9 @@ STREAMS = {
                  "On-disk allocation (st_blocks * 512). Less than size for APFS-compressed "
                  "or sparse files; 0 for dataless/cloud-evicted placeholders."),
             _col("inode", "u64", "", "st_ino — stable file identity (survives rename/move)."),
-            _col("device", "string", "", "Backing device major:minor (st_dev) — disambiguates volume."),
+            _col("device", "string", "", "Backing device major:minor (st_dev). Transient — "
+                 "reassigned on remount/reboot, so NOT stable across runs; join to "
+                 "disk_info.json 'dev_major_minor' (same run) to resolve the volume/mountpoint."),
             _col("nlinks", "u32", "", "st_nlink — hardlink count (>1 means shared inode)."),
             _col("flags", "string", "",
                  "Decoded st_flags (UF_COMPRESSED, SF_DATALESS, SF_RESTRICTED, ...); empty when none."),
