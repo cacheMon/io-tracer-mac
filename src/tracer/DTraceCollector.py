@@ -72,20 +72,27 @@ _ATTACH_FAIL_SIGNS = (
 # can't attach so users can jump straight to the full walkthrough.
 SIP_DOC_URL = "https://github.com/cacheMon/io-tracer-mac/blob/main/docs/SIP.md"
 
+# Substring (lower-cased) that identifies a SIP-caused failure. Kept broad
+# enough to catch wording variants ("... is on" / "... is enabled") but narrow
+# enough not to fire on unrelated compile errors.
+_SIP_SIGN = "system integrity protection"
+
 # Shown once when SIP is the reported cause, instead of a per-probe error dump.
 # Laid out as a bordered, numbered block so the remediation steps are easy to
 # scan in a terminal or launchd log rather than a single run-on paragraph.
-_RULE = "─" * 70
+# Kept strictly ASCII: this prints on a critical failure path, and a
+# UnicodeEncodeError under a C/POSIX locale (launchd, cron) would mask the error.
+_RULE = "-" * 70
 _SIP_GUIDANCE = (
     "DTrace can't start: System Integrity Protection (SIP) is blocking it, so "
     "no I/O events can be captured. How to allow DTrace:\n"
     f"{_RULE}\n"
     "  1. Reboot into macOS Recovery:\n"
-    "       • Apple silicon — shut down, then hold the power button until\n"
-    "         \"Loading startup options\" appears, then: Options → Continue\n"
-    "       • Intel — restart and immediately hold  Command (⌘) + R\n"
-    "  2. Open  Utilities → Terminal  and run ONE of:\n"
-    "       csrutil enable --without dtrace    (recommended — keeps SIP on)\n"
+    "       * Apple silicon - shut down, then hold the power button until\n"
+    "         \"Loading startup options\" appears, then choose Options > Continue\n"
+    "       * Intel - restart and immediately hold Command (Cmd) + R\n"
+    "  2. Open  Utilities > Terminal  and run ONE of:\n"
+    "       csrutil enable --without dtrace    (recommended - keeps SIP on)\n"
     "       csrutil disable                    (fully disables SIP)\n"
     "  3. Reboot, then re-run the tracer with sudo.\n"
     f"\n  Full step-by-step guide:  {SIP_DOC_URL}\n"
@@ -219,7 +226,7 @@ class DTraceCollector:
         with self._report_lock:
             first = script_name not in self.attach_failures
             self.attach_failures[script_name] = line
-            sip = "system integrity protection is on" in line.lower()
+            sip = _SIP_SIGN in line.lower()
             report_sip = sip and not self._sip_reported
             if report_sip:
                 self._sip_reported = True

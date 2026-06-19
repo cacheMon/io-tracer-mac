@@ -197,7 +197,7 @@ class IOTracer:
             logger("error",
                    "Stopping: no DTrace probes attached, so there is nothing to "
                    "trace. This usually means System Integrity Protection (SIP) "
-                   "is blocking DTrace — follow the steps above to allow it.\n"
+                   "is blocking DTrace - follow the steps above to allow it.\n"
                    f"  Full guide:  {SIP_DOC_URL}")
             raise SystemExit(1)
 

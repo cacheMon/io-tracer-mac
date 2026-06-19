@@ -259,6 +259,21 @@ class AttachFailureTests(unittest.TestCase):
         self.assertIn("docs/SIP.md", SIP_DOC_URL)
         self.assertIn(SIP_DOC_URL, _SIP_GUIDANCE)
 
+    def test_sip_guidance_is_ascii(self):
+        # Printed on a critical failure path — must not raise UnicodeEncodeError
+        # under a C/POSIX locale.
+        _SIP_GUIDANCE.encode("ascii")
+
+    def test_sip_detected_without_the_is_on_suffix(self):
+        # Wording variant: a SIP line that doesn't end in "...is on" must still
+        # be classified as SIP (banner shown, startup failed, raw line suppressed).
+        line = ("dtrace: failed to compile script io.d: line 29: probe "
+                "description io:::start does not match any probes. "
+                "System Integrity Protection is enabled")
+        self.c._read_stderr(FakeProc([line]), "io.d")
+        self.assertTrue(self.c._sip_reported)
+        self.assertTrue(self.c.startup_failed)
+
     def test_get_attach_failures_returns_independent_copy(self):
         self.c._report_attach_failure("io.d", "boom")
         snap = self.c.get_attach_failures()
