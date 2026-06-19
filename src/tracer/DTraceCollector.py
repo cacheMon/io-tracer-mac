@@ -11,7 +11,8 @@ eBPF/BCC; its native in-kernel tracing facility is **DTrace**, so this module:
      (``\\x01``) delimited records the D scripts emit.
   3. Parses each record into the shared on-disk schema (see ``schema.py``) and
      dispatches it to the same ``WriteManager`` used by the Linux tracer, so the
-     fs/ds/nw_conn streams are byte-for-byte comparable across operating systems.
+     fs/block/nw_conn rows are byte-for-byte comparable across operating systems
+     (the macOS block stream is named ``block``; the Linux tracer calls it ``ds``).
 
 Process command lines and parent PIDs are not available from the DTrace records
 (the equivalent of reading ``/proc`` on Linux); they are resolved lazily via
@@ -52,7 +53,7 @@ _NON_IO_SIZE_OPS = frozenset({
 # execnames that are pure tracer self-noise we never want in the trace. Only the
 # tracer's own dtrace process is filtered: kernel_task is deliberately NOT
 # excluded, because on macOS it is the issuer of a large share of legitimate
-# block I/O (async writeback, paging, fsync flushes) that the ds stream exists to
+# block I/O (async writeback, paging, fsync flushes) that the block stream exists to
 # capture. (kernel_task issues virtually no syscalls, so the fs stream is
 # unaffected either way.)
 _FILTER_COMMS = frozenset({"dtrace"})
@@ -60,7 +61,7 @@ _FILTER_COMMS = frozenset({"dtrace"})
 # stderr substrings that mean a dtrace stream could not attach its probes (as
 # opposed to a runtime drop). The most common cause on a stock Mac is SIP
 # restricting the syscall/io providers, which makes dtrace exit immediately —
-# leaving the tracer to write empty fs/ds streams for the whole session unless
+# leaving the tracer to write empty fs/block streams for the whole session unless
 # we notice and say so.
 _ATTACH_FAIL_SIGNS = (
     "does not match any probes",
@@ -124,8 +125,8 @@ class DTraceCollector:
         self._threads: list[threading.Thread] = []
         self._running = False
 
-        # Monotonic per-request id for the ds stream (disambiguates repeated I/O
-        # to the same sector), matching the Linux ds `request_id` column.
+        # Monotonic per-request id for the block stream (disambiguates repeated
+        # I/O to the same sector), matching the Linux ds `request_id` column.
         self._req_id = 0
 
         # pid -> (cmdline, ppid) cache. DTrace records carry execname but not the
@@ -146,7 +147,7 @@ class DTraceCollector:
         self._fd_paths_max = 200000
 
         # Per-stream parse/record counts and dtrace drop tallies for the manifest.
-        self.rows = {"fs": 0, "ds": 0, "nw_conn": 0}
+        self.rows = {"fs": 0, "block": 0, "nw_conn": 0}
         self.lost = {}
 
         # script_name -> the stderr line for streams whose probes failed to
@@ -513,7 +514,7 @@ class DTraceCollector:
             mono,
         )
         self.writer.append_block_log(row)
-        self.rows["ds"] += 1
+        self.rows["block"] += 1
 
     def _parse_net(self, line: str):
         f = line.split(SEP)

@@ -6,7 +6,7 @@
  * is issued to a device and `io:::done` on completion. `args[0]` is a
  * `bufinfo_t` (b_blkno, b_bcount, b_flags) and `args[1]` is a `devinfo_t`
  * (dev_major, dev_minor, dev_name) — the same identity/latency data the Linux
- * `ds/` stream records.
+ * `ds/` stream records (written to the macOS `block/` stream).
  *
  * Device latency is measured as done.timestamp - start.timestamp, keyed by the
  * buffer pointer (arg0) so a request issued on one CPU and completed on another

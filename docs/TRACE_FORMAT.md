@@ -14,7 +14,7 @@ Traces are uploaded to object storage with the following prefix structure:
 ```
 mac_trace_v1_test/{MACHINE_ID}/{YYYYMMDD_HHMMSS_mmm}/
 ├── fs/                    # VFS (filesystem syscall) traces
-├── ds/                    # Block-device traces
+├── block/                 # Block-device traces
 ├── nw_conn/               # Network connection lifecycle (default; --no-network to skip)
 ├── process/               # Process state snapshots
 ├── filesystem_snapshot/   # Filesystem metadata snapshots
@@ -70,7 +70,7 @@ mapped address for `mmap`. `inode`, `device`, `container_id` and `fs_type` are
 
 ---
 
-## 2. Block Device Traces — `ds/ds_*.csv.zst`
+## 2. Block Device Traces — `block/block_*.csv.zst`
 
 Captures block-layer I/O completions with device latency. Source: DTrace `io`
 provider (`io:::start` → `io:::done`).
@@ -150,7 +150,7 @@ JSON files captured at trace start: `cpu_info.json`, `memory_info.json`,
 
 ## Compression and File Rotation
 
-Identical to the Linux tracer: continuous streams (`fs`, `ds`, `nw_conn`) are
+Identical to the Linux tracer: continuous streams (`fs`, `block`, `nw_conn`) are
 rotated and Zstandard-compressed when they reach ~80k–100k buffered events, 20
 minutes of age, or 100 MB on disk. Files are named
 `{type}_{YYYYMMDD_HHMMSS_mmm}_{seq}.csv.zst`.

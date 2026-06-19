@@ -10,7 +10,7 @@
 Per-stream details:
 
 - [traces/VFS_EVENTS.md](traces/VFS_EVENTS.md) — filesystem syscalls (`fs/`)
-- [traces/BLOCK_IO_EVENTS.md](traces/BLOCK_IO_EVENTS.md) — block I/O (`ds/`)
+- [traces/BLOCK_IO_EVENTS.md](traces/BLOCK_IO_EVENTS.md) — block I/O (`block/`)
 - [traces/NETWORK_EVENTS.md](traces/NETWORK_EVENTS.md) — connection lifecycle (`nw_conn/`)
 - [traces/FILESYSTEM_SNAPSHOT.md](traces/FILESYSTEM_SNAPSHOT.md)
 - [traces/PROCESS_SNAPSHOT.md](traces/PROCESS_SNAPSHOT.md)

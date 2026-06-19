@@ -3,7 +3,7 @@
 # smoke_test.sh — quick end-to-end sanity check on macOS.
 #
 # Runs the tracer for a few seconds against a small generated workload with
-# uploads disabled, then verifies that fs/ and ds/ trace files were produced
+# uploads disabled, then verifies that fs/ and block/ trace files were produced
 # with the expected schema header. Must be run on macOS with sudo (DTrace).
 #
 # Usage: sudo bash ./scripts/smoke_test.sh
