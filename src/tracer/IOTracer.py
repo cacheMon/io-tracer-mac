@@ -29,7 +29,7 @@ import time
 from datetime import datetime
 
 from . import schema
-from .DTraceCollector import DTraceCollector
+from .DTraceCollector import DTraceCollector, SIP_DOC_URL
 from .FlagMapper import FlagMapper
 from .ObjectStorageManager import ObjectStorageManager
 from .WriterManager import WriteManager
@@ -199,8 +199,8 @@ class IOTracer:
                    "Integrity Protection (SIP) is enabled it must be configured "
                    "to allow DTrace first: reboot into macOS Recovery and run "
                    "`csrutil enable --without dtrace` (or `csrutil disable`), "
-                   "then reboot and re-run with sudo. See docs/SIP.md for the "
-                   "full steps.")
+                   "then reboot and re-run with sudo.\n"
+                   f"Full step-by-step guide: {SIP_DOC_URL}")
             raise SystemExit(1)
 
         if self.automatic_upload:

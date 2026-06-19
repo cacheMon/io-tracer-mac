@@ -42,17 +42,18 @@ normal desktop won't let you change it.
 **If your Mac has Apple silicon** (most Macs from 2020 onward — anything with an
 M1, M2, M3, or newer chip):
 
-1. Choose  → **Shut Down** and wait for it to turn off completely.
+1. Choose the **Apple menu** (top-left of the screen) → **Shut Down** and wait
+   for it to turn off completely.
 2. Press and **hold the power button** until you see "Loading startup options".
 3. Click **Options**, then **Continue**.
 
 **If your Mac has an Intel processor** (older Macs):
 
-1. Choose  → **Restart**.
+1. Choose the **Apple menu** (top-left of the screen) → **Restart**.
 2. Immediately press and hold **Command (⌘) + R** until the Apple logo appears,
    then let go.
 
-Not sure which one you have? Click the  menu → **About This Mac**. If it lists
+Not sure which one you have? Choose the **Apple menu** → **About This Mac**. If it lists
 a "Chip" starting with **Apple M…**, it's Apple silicon; if it lists a
 "Processor" with **Intel**, it's Intel.
 

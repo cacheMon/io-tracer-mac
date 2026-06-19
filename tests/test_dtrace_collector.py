@@ -16,7 +16,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.tracer import schema
-from src.tracer.DTraceCollector import DTraceCollector, SEP
+from src.tracer.DTraceCollector import DTraceCollector, SEP, SIP_DOC_URL, _SIP_GUIDANCE
 from src.tracer.FlagMapper import FlagMapper
 
 
@@ -255,6 +255,10 @@ class AttachFailureTests(unittest.TestCase):
         self.assertEqual(self.c.attach_failures, {})
         self.assertEqual(self.c.lost.get("io.d"), 1)
 
+    def test_sip_guidance_links_to_the_doc(self):
+        self.assertIn("docs/SIP.md", SIP_DOC_URL)
+        self.assertIn(SIP_DOC_URL, _SIP_GUIDANCE)
+
     def test_get_attach_failures_returns_independent_copy(self):
         self.c._report_attach_failure("io.d", "boom")
         snap = self.c.get_attach_failures()
@@ -285,10 +289,12 @@ class AwaitAttachTests(unittest.TestCase):
         c._await_attach()
         self.assertFalse(c.startup_failed)
 
-    def test_no_procs_does_not_flag_failure(self):
+    def test_no_procs_flags_failure(self):
+        # Nothing launched (e.g. missing dtrace binary / no permission) means
+        # there is nothing to trace, so startup must be flagged as failed.
         c = make_collector()
         c._await_attach()
-        self.assertFalse(c.startup_failed)
+        self.assertTrue(c.startup_failed)
 
 
 if __name__ == "__main__":

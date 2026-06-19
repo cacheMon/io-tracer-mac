@@ -68,6 +68,10 @@ _ATTACH_FAIL_SIGNS = (
     "system integrity protection is on",
 )
 
+# Link to the step-by-step SIP guide, included in the messages shown when DTrace
+# can't attach so users can jump straight to the full walkthrough.
+SIP_DOC_URL = "https://github.com/cacheMon/io-tracer-mac/blob/main/docs/SIP.md"
+
 # Shown once when SIP is the reported cause, instead of a per-probe error dump.
 _SIP_GUIDANCE = (
     "DTrace could not attach its kernel probes: System Integrity Protection "
@@ -76,7 +80,8 @@ _SIP_GUIDANCE = (
     "(hold the power button on Apple silicon, or Cmd-R on Intel) and run one of:\n"
     "    csrutil enable --without dtrace   # keep SIP, permit DTrace\n"
     "    csrutil disable                   # fully disable SIP\n"
-    "then reboot and re-run the tracer with sudo."
+    "then reboot and re-run the tracer with sudo.\n"
+    f"Full step-by-step guide: {SIP_DOC_URL}"
 )
 
 
@@ -165,6 +170,10 @@ class DTraceCollector:
         and flip ``startup_failed`` the instant they see a SIP line; here we
         also fall back to flagging it if every stream simply exited."""
         if not self._procs:
+            # Nothing launched at all (missing dtrace binary, no permission, or
+            # every script missing): there is nothing to trace, so fail startup
+            # rather than run on and write empty streams.
+            self.startup_failed = True
             return
         deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline:
