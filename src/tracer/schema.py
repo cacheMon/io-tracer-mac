@@ -15,23 +15,22 @@ Bump ``SCHEMA_VERSION`` whenever a stream's columns change; consumers should rea
 it from ``manifest.json`` and adapt.
 """
 
-# v1: original headerless CSVs, no manifest, per-stream clocks.
-# v2: CSV headers + manifest.json + a common ``mono_ns`` column on every stream.
-# v3: cross-OS aligned layout for ``fs`` and ``block`` — a fixed shared column
-#     prefix (identical names/order to the Windows tracer) followed by the
-#     Linux-only extras, lowercase canonical operation names, ``size_requested``
-#     renamed to ``size``, and a dedicated block ``flags`` column (rwbs sub-flags
-#     split out of ``operation``).
-# v4: ``filesystem_snapshot`` enriched with per-file metadata the snapshot stat
-#     already has but previously dropped — ``physical_size`` (on-disk allocation,
-#     exposes APFS compression / sparse / dataless files), ``inode`` + ``device``
-#     (rename-stable identity, hardlink and per-volume disambiguation), ``nlinks``
-#     (hardlink fan-out), and decoded ``flags``. Appended after ``access_time``
-#     so columns 1-6 are unchanged; ``mono_ns`` stays trailing.
-# v5: macOS-only — renamed the block-I/O stream key/subdir/filename prefix from
-#     ``ds`` to ``block`` for clarity (columns are unchanged). This diverges the
-#     macOS on-disk layout from the Linux tracer, which keeps ``ds``.
-SCHEMA_VERSION = 5
+# The schema below is the current baseline format, pinned to version 1. It is a
+# hard reset of the version counter: this layout — not the original headerless
+# CSVs — is what ``SCHEMA_VERSION = 1`` now denotes. The salient properties of
+# the baseline (for maintainers, not a per-version changelog):
+#   * Every stream begins with a schema header row and a ``manifest.json`` is
+#     written per session; all streams carry a common trailing ``mono_ns`` clock.
+#   * ``fs`` and ``block`` use a cross-OS aligned layout: a fixed shared column
+#     prefix (identical names/order to the Linux/Windows tracers) followed by the
+#     OS-specific extras, lowercase canonical operation names, and a dedicated
+#     block ``flags`` column (rwbs sub-flags split out of ``operation``).
+#   * ``filesystem_snapshot`` carries per-file metadata — ``physical_size``
+#     (on-disk allocation; exposes APFS compression / sparse / dataless files),
+#     ``inode`` + ``device`` (rename-stable identity), ``nlinks``, and ``flags``.
+#   * The block-I/O stream key/subdir/filename prefix is ``block`` (macOS); the
+#     Linux tracer calls the equivalent stream ``ds`` but the columns match.
+SCHEMA_VERSION = 1
 
 
 def _col(name, ctype, unit="", desc=""):

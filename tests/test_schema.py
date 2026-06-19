@@ -41,8 +41,8 @@ ALIGNED_BLOCK_PREFIX = [
 
 
 class SchemaShapeTests(unittest.TestCase):
-    def test_schema_version_is_5(self):
-        self.assertEqual(schema.SCHEMA_VERSION, 5)
+    def test_schema_version_is_1(self):
+        self.assertEqual(schema.SCHEMA_VERSION, 1)
 
     def test_fs_block_aligned_prefix(self):
         self.assertEqual(schema.column_names("fs")[:len(ALIGNED_FS_PREFIX)],
@@ -90,7 +90,7 @@ class ManifestTests(unittest.TestCase):
         block = schema.schema_for_manifest()
         # Round-trips through JSON without error.
         restored = json.loads(json.dumps(block))
-        self.assertEqual(restored["schema_version"], 5)
+        self.assertEqual(restored["schema_version"], 1)
         self.assertEqual(set(restored["streams"]), set(EXPECTED_COLUMN_COUNTS))
 
     def test_manifest_columns_carry_type_and_unit(self):
