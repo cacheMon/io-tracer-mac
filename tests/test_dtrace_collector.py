@@ -237,6 +237,9 @@ class AttachFailureTests(unittest.TestCase):
         self.assertIn("io.d", self.c.attach_failures)
         self.assertEqual(self.c.attach_failures["io.d"], line)
         self.assertTrue(self.c._sip_reported)
+        # A SIP line must trip startup_failed so the tracer stops, even if other
+        # streams are still alive (SIP restricts the whole provider).
+        self.assertTrue(self.c.startup_failed)
 
     def test_compile_failure_without_sip_recorded(self):
         line = ("dtrace: failed to compile script vfs.d: line 37: probe "
@@ -244,6 +247,8 @@ class AttachFailureTests(unittest.TestCase):
         self.c._read_stderr(FakeProc([line]), "vfs.d")
         self.assertIn("vfs.d", self.c.attach_failures)
         self.assertFalse(self.c._sip_reported)  # not a SIP message
+        # A non-SIP single-stream failure must NOT abort the whole tracer.
+        self.assertFalse(self.c.startup_failed)
 
     def test_drop_line_is_not_an_attach_failure(self):
         self.c._read_stderr(FakeProc(["dtrace: 12 dynamic variable drops"]), "io.d")

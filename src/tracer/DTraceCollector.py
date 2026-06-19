@@ -161,15 +161,20 @@ class DTraceCollector:
         probes. A probe-match/SIP failure makes dtrace exit almost immediately,
         so a short grace period lets us warn up front that nothing will be
         captured instead of silently writing empty streams for the whole
-        session. The per-stream stderr threads emit the cause (and SIP guidance);
-        here we add the overall summary once their fate is known."""
+        session. The per-stream stderr threads emit the cause (and SIP guidance)
+        and flip ``startup_failed`` the instant they see a SIP line; here we
+        also fall back to flagging it if every stream simply exited."""
         if not self._procs:
             return
-        deadline = time.monotonic() + 1.5
+        deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline:
-            if all(p.poll() is not None for p in self._procs):
-                break  # every stream already died — no point waiting longer
+            # Stop waiting as soon as SIP is detected (stderr) or all streams die.
+            if self.startup_failed or all(p.poll() is not None for p in self._procs):
+                break
             time.sleep(0.1)
+
+        if self.startup_failed:
+            return  # SIP already detected and reported by the stderr reader
 
         launched = len(self._procs)
         failed = sum(1 for p in self._procs if p.poll() is not None)
@@ -201,6 +206,11 @@ class DTraceCollector:
             report_sip = sip and not self._sip_reported
             if report_sip:
                 self._sip_reported = True
+            if sip:
+                # SIP restricts the whole provider, so even a single SIP-blocked
+                # stream means tracing can't work — fail startup immediately
+                # rather than waiting to see whether every stream dies.
+                self.startup_failed = True
         if first:
             logger("error", f"[dtrace {script_name}] probe attach failed: {line}")
         if report_sip:
