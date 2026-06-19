@@ -69,11 +69,19 @@ and [docs/TRACE_FORMAT.md](docs/TRACE_FORMAT.md) for the full column layout.
 - **macOS** with DTrace (ships with every release at `/usr/sbin/dtrace`).
 - **Root**: DTrace requires `sudo`.
 - **Python 3.9+**.
-- DTrace must be permitted by **System Integrity Protection (SIP)**. The
-  `syscall` and `io` providers used here work under the default SIP policy for
-  unrestricted processes; tracing Apple-signed/"restricted" binaries (and the
-  `fbt` provider) would require disabling SIP, which this tracer does **not**
-  rely on.
+- DTrace must be permitted by **System Integrity Protection (SIP)**. On a stock
+  Mac, SIP restricts the DTrace providers, and the `syscall`/`io` probes this
+  tracer relies on will fail to attach (`probe description ... does not match
+  any probes. System Integrity Protection is on`), producing an empty trace. To
+  allow DTrace, reboot into macOS Recovery and run **one** of:
+
+  ```bash
+  csrutil enable --without dtrace   # keep SIP, permit DTrace (recommended)
+  csrutil disable                   # fully disable SIP
+  ```
+
+  then reboot. The tracer detects this case at startup and prints the same
+  guidance if the probes can't attach.
 
 Python dependencies (`requirements.txt`): `psutil`, `requests`, and `zstandard`.
 `zstandard` is optional — without it the tracer still runs and keeps traces
@@ -229,6 +237,11 @@ src/tracer/snappers/           # filesystem / process / system snapshots
 
 ## Troubleshooting
 
+- **`... does not match any probes. System Integrity Protection is on`** (or
+  *"All DTrace streams exited at startup"*) — SIP is blocking the DTrace
+  providers, so no events can be captured. Reboot into Recovery and run
+  `csrutil enable --without dtrace` (or `csrutil disable`), then reboot and
+  re-run the tracer. See **Requirements** above.
 - **`dtrace: failed to initialize dtrace: DTrace requires additional privileges`**
   — run with `sudo`.
 - **`dtrace cannot control executables signed with restricted entitlements`** —

@@ -216,5 +216,40 @@ class NetParseTests(unittest.TestCase):
         self.assertEqual(cols[idx["remote_addr"]], "")
 
 
+class FakeProc:
+    """Minimal stand-in for a dtrace Popen: its stderr yields canned lines."""
+    def __init__(self, lines):
+        self.stderr = iter(lines)
+
+
+class AttachFailureTests(unittest.TestCase):
+    """SIP / probe-match failures must be detected, recorded for the manifest,
+    and surfaced once — these run without a real dtrace (none exists in CI)."""
+
+    def setUp(self):
+        self.c = make_collector()
+
+    def test_sip_failure_recorded_and_reported_once(self):
+        line = ("dtrace: failed to compile script io.d: line 29: probe "
+                "description io:::start does not match any probes. "
+                "System Integrity Protection is on")
+        self.c._read_stderr(FakeProc([line, line]), "io.d")
+        self.assertIn("io.d", self.c.attach_failures)
+        self.assertEqual(self.c.attach_failures["io.d"], line)
+        self.assertTrue(self.c._sip_reported)
+
+    def test_compile_failure_without_sip_recorded(self):
+        line = ("dtrace: failed to compile script vfs.d: line 37: probe "
+                "description syscall::read:entry does not match any probes")
+        self.c._read_stderr(FakeProc([line]), "vfs.d")
+        self.assertIn("vfs.d", self.c.attach_failures)
+        self.assertFalse(self.c._sip_reported)  # not a SIP message
+
+    def test_drop_line_is_not_an_attach_failure(self):
+        self.c._read_stderr(FakeProc(["dtrace: 12 dynamic variable drops"]), "io.d")
+        self.assertEqual(self.c.attach_failures, {})
+        self.assertEqual(self.c.lost.get("io.d"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

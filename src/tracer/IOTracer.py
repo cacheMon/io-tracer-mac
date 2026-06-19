@@ -119,10 +119,13 @@ class IOTracer:
 
     # ------------------------------------------------------------------ #
     def _attached_probes(self):
-        probes = ["syscall (vfs.d)", "io (io.d)"]
+        streams = [("vfs.d", "syscall (vfs.d)"), ("io.d", "io (io.d)")]
         if self.trace_network:
-            probes.append("syscall (network.d)")
-        return probes
+            streams.append(("network.d", "syscall (network.d)"))
+        # Exclude streams whose probes failed to attach (e.g. blocked by SIP) so
+        # the manifest reports what was actually captured, not what was intended.
+        failed = self.collector.attach_failures
+        return [label for script, label in streams if script not in failed]
 
     def _write_manifest(self, started_at, stopped_at=None):
         """Write the per-session ``manifest.json`` (schema + clock + versions +
@@ -154,6 +157,7 @@ class IOTracer:
             },
             "diagnostics": {
                 "attached_probes": self._attached_probes(),
+                "attach_failures": dict(self.collector.attach_failures),
                 "lost_events": dict(self.collector.lost),
                 "rows_parsed": dict(self.collector.rows),
                 "rows_written": dict(self.writer.rows_written),
