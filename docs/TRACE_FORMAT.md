@@ -15,7 +15,7 @@ Traces are uploaded to object storage with the following prefix structure:
 mac_trace_v1_test/{MACHINE_ID}/{YYYYMMDD_HHMMSS_mmm}/
 ├── fs/                    # VFS (filesystem syscall) traces
 ├── ds/                    # Block-device traces
-├── nw_conn/               # Network connection lifecycle (opt-in: --network)
+├── nw_conn/               # Network connection lifecycle (default; --no-network to skip)
 ├── process/               # Process state snapshots
 ├── filesystem_snapshot/   # Filesystem metadata snapshots
 └── system_spec/           # System specification files (JSON)
@@ -88,7 +88,7 @@ macOS-empty (Linux-only). See [BLOCK_IO_EVENTS.md](traces/BLOCK_IO_EVENTS.md).
 
 ---
 
-## 3. Network Events (opt-in: `--network`) — `nw_conn/*.csv.zst`
+## 3. Network Events (default; `--no-network` to skip) — `nw_conn/*.csv.zst`
 
 Low-overhead connection-lifecycle subset: socket/bind/listen/accept/connect/
 shutdown. The per-packet send/recv path is intentionally not traced.

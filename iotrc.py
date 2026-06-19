@@ -14,9 +14,10 @@ Usage:
 Options:
     -v, --verbose             Print verbose output
     -a, --anonimize           Enable anonymization of process and file names
-    --network                 Enable network event tracing — connection
+    --no-network              Disable network event tracing. Network connection
                               lifecycle (socket/bind/listen/accept/connect/
-                              shutdown). Off by default.
+                              shutdown) is traced by default along with the
+                              filesystem and block-device streams.
     --computer-id             Print this machine ID and exit
     --reward                  Show your reward code (unlocked after uploading)
     --no-upload               Disable automatic upload of traces (for testing)
@@ -25,8 +26,8 @@ Dev Options (only with the 'dev' subcommand):
     --trace-bucket NAME       Override upload bucket (default: mac_trace_v1_test)
 
 Examples:
-    sudo python3 iotrc.py
-    sudo python3 iotrc.py --network -v
+    sudo python3 iotrc.py                 # fs + block + network (all streams)
+    sudo python3 iotrc.py --no-network -v # fs + block only
     sudo python3 iotrc.py dev --no-upload
     python3 iotrc.py --computer-id
 """
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trace macOS I/O operations with DTrace")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print verbose output")
     parser.add_argument("-a", "--anonimize", action="store_true", help="Enable anonymization of process and file names")
-    parser.add_argument("--network", action="store_true", help="Enable network (connection lifecycle) tracing")
+    parser.add_argument("--no-network", action="store_true", help="Disable network tracing (on by default)")
     parser.add_argument("--computer-id", action="store_true", help="Print this machine ID and exit")
     parser.add_argument("--reward", action="store_true", help="Show your reward code (unlocked after uploading traces)")
     parser.add_argument("--no-upload", action="store_true", help="Disable automatic upload of traces (for testing)")
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     dev_parser = subparsers.add_parser("dev", help="Run in developer mode with extra logs and checks")
     dev_parser.add_argument("-v", "--verbose", action="store_true", help="Print verbose output")
     dev_parser.add_argument("-a", "--anonimize", action="store_true", help="Enable anonymization of process and file names")
-    dev_parser.add_argument("--network", action="store_true", help="Enable network (connection lifecycle) tracing")
+    dev_parser.add_argument("--no-network", action="store_true", help="Disable network tracing (on by default)")
     dev_parser.add_argument("--no-upload", action="store_true", help="Disable automatic upload of traces (for testing)")
     dev_parser.add_argument("--trace-bucket", type=str, default=None, help="Override upload bucket name (default: mac_trace_v1_test)")
 
@@ -119,6 +120,6 @@ if __name__ == "__main__":
         anonymous=parse_args.anonimize,
         verbose=parse_args.verbose,
         trace_bucket=(parse_args.trace_bucket if developer_mode else None),
-        trace_network=parse_args.network,
+        trace_network=not parse_args.no_network,
     )
     tracer.trace()
