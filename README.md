@@ -72,16 +72,18 @@ and [docs/TRACE_FORMAT.md](docs/TRACE_FORMAT.md) for the full column layout.
 - DTrace must be permitted by **System Integrity Protection (SIP)**. On a stock
   Mac, SIP restricts the DTrace providers, and the `syscall`/`io` probes this
   tracer relies on will fail to attach (`probe description ... does not match
-  any probes. System Integrity Protection is on`), producing an empty trace. To
-  allow DTrace, reboot into macOS Recovery and run **one** of:
+  any probes. System Integrity Protection is on`). To allow DTrace, reboot into
+  macOS Recovery and run **one** of:
 
   ```bash
   csrutil enable --without dtrace   # keep SIP, permit DTrace (recommended)
   csrutil disable                   # fully disable SIP
   ```
 
-  then reboot. The tracer detects this case at startup and prints the same
-  guidance if the probes can't attach.
+  then reboot. If the probes can't attach, the tracer **stops at startup** with
+  this same guidance rather than recording an empty trace. See
+  [docs/SIP.md](docs/SIP.md) for the full step-by-step (booting into Recovery,
+  re-enabling SIP afterwards, caveats).
 
 Python dependencies (`requirements.txt`): `psutil`, `requests`, and `zstandard`.
 `zstandard` is optional — without it the tracer still runs and keeps traces

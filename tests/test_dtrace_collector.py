@@ -250,6 +250,41 @@ class AttachFailureTests(unittest.TestCase):
         self.assertEqual(self.c.attach_failures, {})
         self.assertEqual(self.c.lost.get("io.d"), 1)
 
+    def test_get_attach_failures_returns_independent_copy(self):
+        self.c._report_attach_failure("io.d", "boom")
+        snap = self.c.get_attach_failures()
+        self.assertEqual(snap, {"io.d": "boom"})
+        snap["vfs.d"] = "x"  # mutating the copy must not touch the collector
+        self.assertNotIn("vfs.d", self.c.attach_failures)
+
+
+class FakeFatedProc:
+    """Stands in for a dtrace Popen: poll() reports already-exited (rc) or live."""
+    def __init__(self, returncode):
+        self._rc = returncode
+
+    def poll(self):
+        return self._rc
+
+
+class AwaitAttachTests(unittest.TestCase):
+    def test_startup_failed_when_all_streams_exit(self):
+        c = make_collector()
+        c._procs = [FakeFatedProc(1), FakeFatedProc(1)]
+        c._await_attach()
+        self.assertTrue(c.startup_failed)
+
+    def test_startup_ok_when_a_stream_survives(self):
+        c = make_collector()
+        c._procs = [FakeFatedProc(1), FakeFatedProc(None)]  # one still running
+        c._await_attach()
+        self.assertFalse(c.startup_failed)
+
+    def test_no_procs_does_not_flag_failure(self):
+        c = make_collector()
+        c._await_attach()
+        self.assertFalse(c.startup_failed)
+
 
 if __name__ == "__main__":
     unittest.main()

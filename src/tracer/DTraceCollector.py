@@ -135,6 +135,9 @@ class DTraceCollector:
         self.attach_failures: dict[str, str] = {}
         self._report_lock = threading.Lock()
         self._sip_reported = False
+        # Set by _await_attach when no stream could attach its probes (the SIP
+        # case): the caller uses it to stop instead of writing empty streams.
+        self.startup_failed = False
 
         self.dtrace_path = shutil.which("dtrace") or "/usr/sbin/dtrace"
 
@@ -171,14 +174,21 @@ class DTraceCollector:
         launched = len(self._procs)
         failed = sum(1 for p in self._procs if p.poll() is not None)
         if failed >= launched:
+            self.startup_failed = True
             logger("error",
-                   "All DTrace streams exited at startup — the trace will "
-                   "contain no filesystem or block-I/O events. See the message "
-                   "above for how to allow DTrace.")
+                   "All DTrace streams exited at startup — no filesystem or "
+                   "block-I/O events can be captured.")
         elif failed:
             logger("warning",
                    f"{failed} of {launched} DTrace streams failed to start; the "
                    f"corresponding trace stream(s) will be empty.")
+
+    def get_attach_failures(self) -> dict[str, str]:
+        """Return a snapshot of the per-stream attach failures. Taken under the
+        lock because the background stderr threads mutate the dict concurrently
+        with the main thread reading it (manifest write / attached-probe list)."""
+        with self._report_lock:
+            return dict(self.attach_failures)
 
     def _report_attach_failure(self, script_name: str, line: str):
         """A dtrace stream failed to compile/attach its probes. Record it for the
