@@ -195,12 +195,10 @@ class IOTracer:
             self.collector.stop()
             self.writer.close_handles()
             logger("error",
-                   "Stopping: DTrace could not attach any probes. If System "
-                   "Integrity Protection (SIP) is enabled it must be configured "
-                   "to allow DTrace first: reboot into macOS Recovery and run "
-                   "`csrutil enable --without dtrace` (or `csrutil disable`), "
-                   "then reboot and re-run with sudo.\n"
-                   f"Full step-by-step guide: {SIP_DOC_URL}")
+                   "Stopping: no DTrace probes attached, so there is nothing to "
+                   "trace. This usually means System Integrity Protection (SIP) "
+                   "is blocking DTrace — follow the steps above to allow it.\n"
+                   f"  Full guide:  {SIP_DOC_URL}")
             raise SystemExit(1)
 
         if self.automatic_upload:
